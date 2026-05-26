@@ -2,7 +2,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [main]
+    branches: [ "main" ]
   workflow_dispatch:
 
 permissions:
@@ -15,34 +15,38 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build-and-deploy:
+  deploy:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: 'npm'
+          node-version: 18
+          cache: "npm"
 
-      - run: npm ci
+      - name: Install dependencies
+        run: npm ci
 
-      - run: npm run lint
+      - name: Set Vite base for GitHub Pages
+        run: echo "VITE_BASE=/scoring-app/" >> $GITHUB_ENV
 
-      - run: npm run test -- --run
+      - name: Build
+        run: npm run build
 
-      - run: npm run build
-        env:
-          VITE_BASE: /${{ github.event.repository.name }}/
+      - name: Add 404 fallback for SPA routing
+        run: cp dist/index.html dist/404.html
 
-      - uses: actions/configure-pages@v4
-
-      - uses: actions/upload-pages-artifact@v3
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
         with:
           path: dist
 
-      - id: deployment
+      - name: Deploy to GitHub Pages
+        id: deployment
         uses: actions/deploy-pages@v4
