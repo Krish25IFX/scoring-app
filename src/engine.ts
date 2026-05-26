@@ -77,7 +77,7 @@ export function getNextServiceState(
   config: MatchConfig
 ): ServiceState {
   if (config.playMode === 'singles') {
-    // In singles: if server wins, they keep serve; court switches based on server's score
+    // In singles: if server wins, they keep serve; court switches based on server's score.
     if (rallyWinner === currentService.servingTeam) {
       return {
         ...currentService,
