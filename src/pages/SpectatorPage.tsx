@@ -1,10 +1,18 @@
 import { useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useMatch } from '../context/MatchContext';
+import { useMatchTimer } from '../hooks/useMatchTimer';
+import type { TeamId } from '../types';
 
 export default function SpectatorPage() {
   const navigate = useNavigate();
   const { match } = useMatch();
+
+  const timer = useMatchTimer(
+    match?.startedAt ?? Date.now(),
+    match?.endedAt ?? null,
+    match?.isPaused ?? false
+  );
 
   useEffect(() => {
     if (!match) navigate('/');
@@ -14,80 +22,204 @@ export default function SpectatorPage() {
 
   const currentGame = match.games[match.currentGameIndex];
   const isOver = match.matchWinner !== null;
-  const servingA = currentGame.serviceState.servingTeam === 'A';
+  const servingTeam = currentGame.serviceState.servingTeam;
+  const completedGames = match.games.filter((g) => g.isComplete);
+
+  const teamColor = (team: TeamId) => team === 'A' ? 'var(--color-score-a)' : 'var(--color-score-b)';
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-4" style={{ backgroundColor: 'var(--color-bg)' }}>
-      {/* Game tally */}
-      <div className="text-lg md:text-2xl font-medium mb-4" style={{ color: 'var(--color-text-muted)' }}>
-        Game {match.currentGameIndex + 1} of {match.config.bestOf} · Best of {match.config.bestOf}
-      </div>
-
-      {/* Big Scoreboard */}
-      <div className="flex items-center justify-center gap-4 md:gap-12 w-full max-w-4xl">
-        {/* Team A */}
-        <div className="flex-1 text-center">
-          <div className="flex items-center justify-center gap-2 mb-2">
-            {servingA && <span className="text-2xl md:text-4xl" title="Serving">🏸</span>}
-            <h2 className="text-2xl md:text-4xl font-bold truncate" style={{ color: 'var(--color-score-a)' }}>
-              {match.teams.A.name}
-            </h2>
-          </div>
-          <div
-            className="text-7xl md:text-[12rem] font-black leading-none"
-            style={{ color: 'var(--color-score-a)' }}
-            aria-label={`${match.teams.A.name} score: ${currentGame.scores.A}`}
-          >
-            {currentGame.scores.A}
-          </div>
-          <div className="text-xl md:text-3xl mt-2 font-semibold" style={{ color: 'var(--color-text-muted)' }}>
-            Games: {match.gamesWon.A}
-          </div>
-        </div>
-
-        {/* Divider */}
-        <div className="text-4xl md:text-6xl font-light" style={{ color: 'var(--color-text-muted)' }}>–</div>
-
-        {/* Team B */}
-        <div className="flex-1 text-center">
-          <div className="flex items-center justify-center gap-2 mb-2">
-            <h2 className="text-2xl md:text-4xl font-bold truncate" style={{ color: 'var(--color-score-b)' }}>
-              {match.teams.B.name}
-            </h2>
-            {!servingA && <span className="text-2xl md:text-4xl" title="Serving">🏸</span>}
-          </div>
-          <div
-            className="text-7xl md:text-[12rem] font-black leading-none"
-            style={{ color: 'var(--color-score-b)' }}
-            aria-label={`${match.teams.B.name} score: ${currentGame.scores.B}`}
-          >
-            {currentGame.scores.B}
-          </div>
-          <div className="text-xl md:text-3xl mt-2 font-semibold" style={{ color: 'var(--color-text-muted)' }}>
-            Games: {match.gamesWon.B}
-          </div>
+    <div
+      className="min-h-screen flex flex-col select-none"
+      style={{ backgroundColor: 'var(--color-bg)' }}
+    >
+      {/* Header bar */}
+      <div
+        className="flex items-center justify-between px-4 py-2 border-b"
+        style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface)' }}
+      >
+        <span className="text-sm font-semibold uppercase tracking-widest" style={{ color: 'var(--color-text-muted)' }}>
+          🏸 Badminton · {match.config.playMode} · Best of {match.config.bestOf}
+        </span>
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-mono tabular-nums" style={{ color: 'var(--color-text-muted)' }}>⏱ {timer}</span>
+          {match.isPaused && !isOver && (
+            <span className="px-3 py-0.5 rounded-full text-xs font-black bg-yellow-400 text-black animate-pulse">PAUSED</span>
+          )}
         </div>
       </div>
 
-      {/* Match over */}
-      {isOver && (
-        <div className="mt-8 text-3xl md:text-5xl font-bold text-green-600">
-          🏆 {match.teams[match.matchWinner!].name} wins!
+      {/* Main scoreboard */}
+      <div className="flex-1 flex flex-col items-center justify-center px-4 py-6 gap-4">
+        {/* Game indicator */}
+        <div className="flex gap-2">
+          {Array.from({ length: match.config.bestOf }, (_, i) => {
+            const g = match.games[i];
+            const isActive = i === match.currentGameIndex;
+            const isDone = g?.isComplete;
+            return (
+              <div
+                key={i}
+                className="w-3 h-3 rounded-full transition-all"
+                style={{
+                  backgroundColor: isDone
+                    ? teamColor(g.winner!)
+                    : isActive
+                    ? 'var(--color-primary)'
+                    : 'var(--color-border)',
+                  transform: isActive ? 'scale(1.4)' : 'scale(1)',
+                }}
+              />
+            );
+          })}
         </div>
-      )}
 
-      {/* Paused */}
-      {match.isPaused && !isOver && (
-        <div className="mt-8 text-2xl md:text-4xl font-bold text-yellow-600 animate-pulse">
-          ⏸ PAUSED
+        <p className="text-base font-semibold" style={{ color: 'var(--color-text-muted)' }}>
+          Game {match.currentGameIndex + 1} of {match.config.bestOf}
+        </p>
+
+        {/* Scores */}
+        <div className="w-full max-w-4xl flex items-center justify-center gap-2 md:gap-8">
+          {/* Team A */}
+          <div className="flex-1 flex flex-col items-center gap-2">
+            <div className="flex items-center gap-2">
+              {servingTeam === 'A' && !isOver && (
+                <span className="text-2xl md:text-4xl" title="Serving">🏸</span>
+              )}
+              <h2
+                className="text-2xl md:text-5xl font-black text-center leading-tight"
+                style={{ color: teamColor('A') }}
+              >
+                {match.teams.A.name}
+              </h2>
+            </div>
+            {match.config.playMode === 'doubles' && (
+              <p className="text-sm md:text-base text-center" style={{ color: 'var(--color-text-muted)' }}>
+                {match.teams.A.players.map((p) => p.name).join(' / ')}
+              </p>
+            )}
+            {match.config.playMode === 'singles' && (
+              <p className="text-sm md:text-base text-center" style={{ color: 'var(--color-text-muted)' }}>
+                {match.teams.A.players[0]?.name}
+              </p>
+            )}
+            <div
+              className="text-[8rem] md:text-[16rem] font-black leading-none tabular-nums"
+              style={{ color: teamColor('A') }}
+              aria-label={`${match.teams.A.name}: ${currentGame.scores.A}`}
+            >
+              {currentGame.scores.A}
+            </div>
+            {/* Games won pips */}
+            <div className="flex gap-1.5">
+              {Array.from({ length: Math.ceil(match.config.bestOf / 2) }, (_, i) => (
+                <div
+                  key={i}
+                  className="w-4 h-4 rounded-full border-2"
+                  style={{
+                    backgroundColor: i < match.gamesWon.A ? teamColor('A') : 'transparent',
+                    borderColor: teamColor('A'),
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Centre column */}
+          <div className="flex flex-col items-center gap-3">
+            <div className="text-4xl md:text-6xl font-light" style={{ color: 'var(--color-text-muted)' }}>–</div>
+            {/* Previous game scores */}
+            {completedGames.length > 0 && (
+              <div className="flex flex-col gap-1 items-center">
+                {completedGames.map((g, i) => (
+                  <div key={i} className="text-center">
+                    <div className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-muted)' }}>G{i + 1}</div>
+                    <div
+                      className="text-base md:text-xl font-black tabular-nums"
+                      style={{ color: g.winner ? teamColor(g.winner) : 'var(--color-text)' }}
+                    >
+                      {g.scores.A}–{g.scores.B}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Team B */}
+          <div className="flex-1 flex flex-col items-center gap-2">
+            <div className="flex items-center gap-2">
+              <h2
+                className="text-2xl md:text-5xl font-black text-center leading-tight"
+                style={{ color: teamColor('B') }}
+              >
+                {match.teams.B.name}
+              </h2>
+              {servingTeam === 'B' && !isOver && (
+                <span className="text-2xl md:text-4xl" title="Serving">🏸</span>
+              )}
+            </div>
+            {match.config.playMode === 'doubles' && (
+              <p className="text-sm md:text-base text-center" style={{ color: 'var(--color-text-muted)' }}>
+                {match.teams.B.players.map((p) => p.name).join(' / ')}
+              </p>
+            )}
+            {match.config.playMode === 'singles' && (
+              <p className="text-sm md:text-base text-center" style={{ color: 'var(--color-text-muted)' }}>
+                {match.teams.B.players[0]?.name}
+              </p>
+            )}
+            <div
+              className="text-[8rem] md:text-[16rem] font-black leading-none tabular-nums"
+              style={{ color: teamColor('B') }}
+              aria-label={`${match.teams.B.name}: ${currentGame.scores.B}`}
+            >
+              {currentGame.scores.B}
+            </div>
+            {/* Games won pips */}
+            <div className="flex gap-1.5">
+              {Array.from({ length: Math.ceil(match.config.bestOf / 2) }, (_, i) => (
+                <div
+                  key={i}
+                  className="w-4 h-4 rounded-full border-2"
+                  style={{
+                    backgroundColor: i < match.gamesWon.B ? teamColor('B') : 'transparent',
+                    borderColor: teamColor('B'),
+                  }}
+                />
+              ))}
+            </div>
+          </div>
         </div>
-      )}
 
-      {/* Nav */}
-      <div className="mt-8 flex gap-4">
-        <Link to="/operator" className="px-4 py-2 rounded-lg border text-sm" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-muted)' }}>
-          ← Operator View
-        </Link>
+        {/* Serve court info */}
+        {!isOver && (
+          <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
+            {match.config.playMode === 'doubles'
+              ? `Server: ${match.teams[servingTeam].players[currentGame.serviceState.serverPlayerIndex]?.name ?? '—'} · ${currentGame.serviceState.court} court`
+              : `${match.teams[servingTeam].name} serving from ${currentGame.serviceState.court} court`}
+          </p>
+        )}
+
+        {/* Paused */}
+        {match.isPaused && !isOver && (
+          <div className="text-2xl md:text-4xl font-black text-yellow-500 animate-pulse">⏸ PAUSED</div>
+        )}
+
+        {/* Match winner */}
+        {isOver && (
+          <div className="mt-4 text-center">
+            <div className="text-5xl md:text-7xl mb-2">🏆</div>
+            <p
+              className="text-3xl md:text-6xl font-black"
+              style={{ color: teamColor(match.matchWinner!) }}
+            >
+              {match.teams[match.matchWinner!].name}
+            </p>
+            <p className="text-xl md:text-3xl font-semibold mt-1" style={{ color: 'var(--color-text-muted)' }}>
+              wins the match · {match.gamesWon.A}–{match.gamesWon.B}
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

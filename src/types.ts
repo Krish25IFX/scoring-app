@@ -6,6 +6,12 @@ export interface Player {
   name: string;
 }
 
+export interface CaptainInfo {
+  id: string;
+  name: string;
+  players: string[];
+}
+
 export interface Team {
   id: TeamId;
   name: string;
@@ -68,6 +74,7 @@ export interface MatchSummary {
   config: MatchConfig;
   startedAt: number;
   endedAt: number | null;
+  games: GameState[];
 }
 
 export const DEFAULT_CONFIG: MatchConfig = {

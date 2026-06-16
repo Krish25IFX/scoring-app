@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback, useRef, useEffect, type ReactNode } from 'react';
-import type { MatchState, MatchConfig, TeamId } from '../types';
+import type { MatchState, MatchConfig, TeamId, CaptainInfo } from '../types';
+import { CAPTAINS } from '../config/players';
 import {
   createMatchState,
   scorePoint,
@@ -13,6 +14,13 @@ interface MatchContextType {
   match: MatchState | null;
   history: MatchState[];
   historyIndex: number;
+  captains: CaptainInfo[];
+  captainSelections: Record<string, string[]>;
+  selectedCaptainAId: string | null;
+  selectedCaptainBId: string | null;
+  setCaptainSelection: (captainId: string, players: string[]) => void;
+  setOperatorSelectedCaptain: (team: TeamId, captainId: string) => void;
+  
   startMatch: (
     config: MatchConfig,
     teamA: { name: string; players: string[] },
@@ -34,6 +42,15 @@ export function MatchProvider({ children }: { children: ReactNode }) {
   const [match, setMatch] = useState<MatchState | null>(null);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [history, setHistory] = useState<MatchState[]>([]);
+  
+  const captains: CaptainInfo[] = CAPTAINS.map((c) => ({
+    id: c.id,
+    name: c.name,
+    players: c.players,
+  }));
+  const [captainSelections, setCaptainSelections] = useState<Record<string, string[]>>({});
+  const [selectedCaptainAId, setSelectedCaptainAId] = useState<string | null>(null);
+  const [selectedCaptainBId, setSelectedCaptainBId] = useState<string | null>(null);
   const historyRef = useRef({ history: [] as MatchState[], index: -1 });
 
   // Keep ref in sync via effect
@@ -126,12 +143,30 @@ export function MatchProvider({ children }: { children: ReactNode }) {
     setHistoryIndex(-1);
   }, []);
 
+  const setCaptainSelection = useCallback((captainId: string, players: string[]) => {
+    setCaptainSelections((prev) => ({ ...prev, [captainId]: players }));
+  }, []);
+
+  const setOperatorSelectedCaptain = useCallback((team: TeamId, captainId: string) => {
+    if (team === 'A') {
+      setSelectedCaptainAId(captainId);
+    } else {
+      setSelectedCaptainBId(captainId);
+    }
+  }, []);
+
   return (
     <MatchContext.Provider
       value={{
         match,
         history,
         historyIndex,
+        captains,
+        captainSelections,
+        selectedCaptainAId,
+        selectedCaptainBId,
+        setCaptainSelection,
+        setOperatorSelectedCaptain,
         startMatch,
         point,
         undo,

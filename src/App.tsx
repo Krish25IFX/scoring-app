@@ -2,10 +2,12 @@ import { Routes, Route } from 'react-router-dom';
 import { ThemeProvider } from './context/ThemeContext';
 import { MatchProvider } from './context/MatchContext';
 import SetupPage from './pages/SetupPage';
+import CaptainLoginPage from './pages/CaptainLoginPage';
 import OperatorPage from './pages/OperatorPage';
 import SpectatorPage from './pages/SpectatorPage';
 import HistoryPage from './pages/HistoryPage';
 import HomePage from './pages/HomePage';
+import PinGate from './components/PinGate';
 
 export default function App() {
   return (
@@ -13,8 +15,9 @@ export default function App() {
       <MatchProvider>
         <Routes>
           <Route path="/" element={<HomePage />} />
-          <Route path="/setup" element={<SetupPage />} />
-          <Route path="/operator" element={<OperatorPage />} />
+          <Route path="/captain-login" element={<CaptainLoginPage />} />
+          <Route path="/setup" element={<PinGate><SetupPage /></PinGate>} />
+          <Route path="/operator" element={<PinGate><OperatorPage /></PinGate>} />
           <Route path="/spectator" element={<SpectatorPage />} />
           <Route path="/history" element={<HistoryPage />} />
         </Routes>

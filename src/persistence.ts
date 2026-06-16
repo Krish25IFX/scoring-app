@@ -42,6 +42,7 @@ export async function getAllMatches(): Promise<MatchSummary[]> {
       config: m.config,
       startedAt: m.startedAt,
       endedAt: m.endedAt,
+      games: m.games,
     }))
     .sort((a, b) => b.startedAt - a.startedAt);
 }

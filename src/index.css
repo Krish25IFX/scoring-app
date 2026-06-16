@@ -5,25 +5,31 @@
   --color-primary-light: #3b82f6;
   --color-secondary: #059669;
   --color-accent: #f59e0b;
-  --color-bg: #ffffff;
-  --color-surface: #f8fafc;
+  --color-bg: #f0f4f8;
+  --color-surface: #ffffff;
   --color-text: #0f172a;
   --color-text-muted: #64748b;
-  --color-border: #e2e8f0;
-  --color-score-a: #2563eb;
+  --color-border: #cbd5e1;
+  --color-score-a: #1d4ed8;
   --color-score-b: #dc2626;
 }
 
 .dark {
-  --color-bg: #0f172a;
-  --color-surface: #1e293b;
+  --color-bg: #0a0f1e;
+  --color-surface: #111827;
   --color-text: #f1f5f9;
   --color-text-muted: #94a3b8;
-  --color-border: #334155;
+  --color-border: #1e293b;
   --color-primary: #3b82f6;
   --color-primary-light: #60a5fa;
   --color-secondary: #10b981;
   --color-accent: #fbbf24;
+  --color-score-a: #60a5fa;
+  --color-score-b: #f87171;
+}
+
+html {
+  -webkit-tap-highlight-color: transparent;
 }
 
 body {
@@ -32,8 +38,22 @@ body {
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   margin: 0;
   transition: background-color 0.2s, color 0.2s;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 * {
   box-sizing: border-box;
 }
+
+/* Prevent text selection on score buttons */
+button {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Number font for scores — use tabular lining numerals */
+.tabular-nums {
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
