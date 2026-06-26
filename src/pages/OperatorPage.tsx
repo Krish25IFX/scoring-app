@@ -24,7 +24,7 @@ function GameBadge({ gameIndex, games }: { gameIndex: number; games: GameState[]
 
 export default function OperatorPage() {
   const navigate = useNavigate();
-  const { match, point, undo, redo, pause, swapEnds, resetMatch, historyIndex, history } = useMatch();
+  const { match, ready, point, undo, redo, pause, swapEnds, resetMatch, historyIndex, history } = useMatch();
   const { theme, toggle } = useTheme();
   const [lastPoint, setLastPoint] = useState<TeamId | null>(null);
 
@@ -35,8 +35,8 @@ export default function OperatorPage() {
   );
 
   useEffect(() => {
-    if (!match) navigate('/setup');
-  }, [match, navigate]);
+    if (ready && !match) navigate('/setup');
+  }, [match, ready, navigate]);
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {

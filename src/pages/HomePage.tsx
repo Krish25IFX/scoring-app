@@ -84,23 +84,13 @@ export default function HomePage() {
             {match ? '🔄 New Match' : '▶ Start New Match'}
           </Link>
 
-          {match && activeGame && (
-            <Link
-              to="/spectator"
-              className="flex items-center justify-center gap-2 w-full py-3 px-6 rounded-2xl text-lg font-semibold border-2 transition-transform hover:scale-105"
-              style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }}
-            >
-              📊 Show Score
-            </Link>
-          )}
-
-          {(!match || !activeGame) && (
-            <div className="p-4 rounded-2xl text-center border-2" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface)' }}>
-              <p style={{ color: 'var(--color-text-muted)' }} className="text-sm">
-                📊 No match in progress
-              </p>
-            </div>
-          )}
+          <Link
+            to="/spectator"
+            className="flex items-center justify-center gap-2 w-full py-3 px-6 rounded-2xl text-lg font-semibold border-2 transition-transform hover:scale-105"
+            style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }}
+          >
+            📊 Live Score (Spectator)
+          </Link>
 
           <Link
             to="/history"
@@ -108,6 +98,14 @@ export default function HomePage() {
             style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
           >
             📋 Match History
+          </Link>
+
+          <Link
+            to="/standings"
+            className="flex items-center justify-center gap-2 w-full py-3.5 px-6 rounded-2xl text-lg font-semibold border-2 transition-transform hover:scale-105"
+            style={{ borderColor: 'var(--color-secondary)', color: 'var(--color-secondary)' }}
+          >
+            🏆 Tournament Standings
           </Link>
         </div>
 

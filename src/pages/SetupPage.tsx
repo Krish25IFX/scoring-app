@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useMatch } from '../context/MatchContext';
-import { PLAYERS } from '../config/players';
-import type { MatchConfig, PlayMode, TeamId } from '../types';
+import type { MatchConfig, PlayMode, TeamId, Category } from '../types';
+import { CATEGORIES } from '../types';
 
 export default function SetupPage() {
   const navigate = useNavigate();
@@ -15,9 +15,11 @@ export default function SetupPage() {
     setOperatorSelectedCaptain,
   } = useMatch();
 
+  const [category, setCategory] = useState<Category>('mens_single');
   const [bestOf, setBestOf] = useState(3);
-  const [pointsPerGame, setPointsPerGame] = useState('21');
+  const [pointsPerGame, setPointsPerGame] = useState('11');
   const [winByTwo, setWinByTwo] = useState(true);
+  const [pointCap, setPointCap] = useState(15);
   const [playMode, setPlayMode] = useState<PlayMode>('singles');
   const [teamAName, setTeamAName] = useState('');
   const [teamBName, setTeamBName] = useState('');
@@ -26,7 +28,13 @@ export default function SetupPage() {
   const [operatorSelectedA, setOperatorSelectedA] = useState<string[]>([]);
   const [operatorSelectedB, setOperatorSelectedB] = useState<string[]>([]);
   const [firstServer, setFirstServer] = useState<TeamId>('A');
-  const [changeEnds, setChangeEnds] = useState(true);
+  const [firstReceiverPlayerIndex, setFirstReceiverPlayerIndex] = useState(0);
+
+  // When category changes, update play mode
+  useEffect(() => {
+    const cat = CATEGORIES.find((c) => c.id === category);
+    if (cat) setPlayMode(cat.mode);
+  }, [category]);
 
   const submittedCaptains = captains.filter((c) => (captainSelections[c.id] ?? []).length > 0);
   const selectedCaptainA = captains.find((c) => c.id === selectedCaptainAId) ?? null;
@@ -52,10 +60,11 @@ export default function SetupPage() {
     if (selectedCaptainA) {
       if (playMode === 'singles') {
         setTeamAPlayers([operatorSelectedA[0] || '', '']);
-        setTeamAName(operatorSelectedA[0] || '');
+        setTeamAName(selectedCaptainA.teamName);
       } else {
         const players = operatorSelectedA.slice(0, 2);
         setTeamAPlayers(players.length === 2 ? (players as [string, string]) : [players[0] || '', players[1] || '']);
+        setTeamAName(selectedCaptainA.teamName);
       }
     }
   }, [selectedCaptainA, playMode, operatorSelectedA]);
@@ -64,23 +73,14 @@ export default function SetupPage() {
     if (selectedCaptainB) {
       if (playMode === 'singles') {
         setTeamBPlayers([operatorSelectedB[0] || '', '']);
-        setTeamBName(operatorSelectedB[0] || '');
+        setTeamBName(selectedCaptainB.teamName);
       } else {
         const players = operatorSelectedB.slice(0, 2);
         setTeamBPlayers(players.length === 2 ? (players as [string, string]) : [players[0] || '', players[1] || '']);
+        setTeamBName(selectedCaptainB.teamName);
       }
     }
   }, [selectedCaptainB, playMode, operatorSelectedB]);
-
-  // Auto-set team name from player name (singles only, no captain)
-  useEffect(() => {
-    if (playMode === 'singles' && !selectedCaptainA) {
-      if (teamAPlayers[0]) setTeamAName(teamAPlayers[0]);
-    }
-    if (playMode === 'singles' && !selectedCaptainB) {
-      if (teamBPlayers[0]) setTeamBName(teamBPlayers[0]);
-    }
-  }, [playMode, teamAPlayers[0], teamBPlayers[0], selectedCaptainA, selectedCaptainB]);
 
   const requiredA = playMode === 'singles' ? [teamAPlayers[0]] : [teamAPlayers[0], teamAPlayers[1]];
   const requiredB = playMode === 'singles' ? [teamBPlayers[0]] : [teamBPlayers[0], teamBPlayers[1]];
@@ -103,11 +103,12 @@ export default function SetupPage() {
       bestOf,
       pointsToWin,
       winByTwo,
-      pointCap: null,
+      pointCap: winByTwo ? pointCap : null,
       playMode,
-      changeEndsAfterGame: changeEnds,
-      changeEndsInDecidingGame: changeEnds,
-      changeEndsAtScore: 11,
+      category,
+      changeEndsAfterGame: true,
+      changeEndsInDecidingGame: false,
+      changeEndsAtScore: 0,
     };
 
     const playersA = playMode === 'singles' ? [teamAPlayers[0]] : teamAPlayers;
@@ -115,7 +116,16 @@ export default function SetupPage() {
     const nameA = teamAName || playersA[0];
     const nameB = teamBName || playersB[0];
 
-    startMatch(config, { name: nameA, players: playersA }, { name: nameB, players: playersB }, firstServer);
+    startMatch(
+      config,
+      { name: nameA, players: playersA },
+      { name: nameB, players: playersB },
+      firstServer,
+      category,
+      selectedCaptainA?.teamName || nameA,
+      selectedCaptainB?.teamName || nameB,
+      firstReceiverPlayerIndex
+    );
     navigate('/operator');
   };
 
@@ -181,26 +191,18 @@ export default function SetupPage() {
         </div>
         <fieldset className="space-y-2">
           <legend className="font-semibold text-sm uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>
-            Play Mode
+            Category
           </legend>
-          <div className="flex gap-3">
-            {(['singles', 'doubles'] as const).map((mode) => (
-              <button
-                key={mode}
-                onClick={() => setPlayMode(mode)}
-                className={`flex-1 py-3 rounded-lg font-medium capitalize transition-colors border-2 ${
-                  playMode === mode ? 'text-white' : ''
-                }`}
-                style={{
-                  backgroundColor: playMode === mode ? 'var(--color-primary)' : 'transparent',
-                  borderColor: playMode === mode ? 'var(--color-primary)' : 'var(--color-border)',
-                  color: playMode === mode ? 'white' : 'var(--color-text)',
-                }}
-              >
-                {mode}
-              </button>
+          <select
+            value={category}
+            onChange={(e) => setCategory(e.target.value as Category)}
+            className="w-full p-3 rounded-lg border-2"
+            style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface)', color: 'var(--color-text)' }}
+          >
+            {CATEGORIES.map((cat) => (
+              <option key={cat.id} value={cat.id}>{cat.label} ({cat.mode})</option>
             ))}
-          </div>
+          </select>
         </fieldset>
 
         {/* Games */}
@@ -237,7 +239,7 @@ export default function SetupPage() {
           </div>
         </div>
 
-        {/* Win by 2 */}
+        {/* Win by 2 with cap */}
         <label className="flex items-center gap-3 cursor-pointer">
           <input
             type="checkbox"
@@ -245,30 +247,45 @@ export default function SetupPage() {
             onChange={(e) => setWinByTwo(e.target.checked)}
             className="w-5 h-5 rounded"
           />
-          <span className="font-medium">Win by 2 (no cap)</span>
+          <span className="font-medium">Win by 2 (max {pointCap} points on deuce)</span>
         </label>
 
-        {/* Change Ends */}
-        <label className="flex items-center gap-3 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={changeEnds}
-            onChange={(e) => setChangeEnds(e.target.checked)}
-            className="w-5 h-5 rounded"
-          />
-          <span className="font-medium">Change ends after each game &amp; at 11 in deciding</span>
-        </label>
+        {winByTwo && (
+          <div className="space-y-1">
+            <label className="text-sm font-medium" style={{ color: 'var(--color-text-muted)' }}>
+              Point cap (max on deuce)
+            </label>
+            <input
+              type="number"
+              value={pointCap}
+              onChange={(e) => setPointCap(Number(e.target.value))}
+              min={1}
+              className="w-full p-3 rounded-lg border-2"
+              style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface)', color: 'var(--color-text)' }}
+            />
+          </div>
+        )}
 
-        {/* Teams */}
+        {/* Side change info */}
+        <div className="p-3 rounded-lg border" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface)' }}>
+          <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
+            ℹ️ Side change happens after each match (set) only. No side change at half point.
+          </p>
+        </div>
+
+        {/* Teams - Player Selection */}
         <div className="space-y-4">
-          <h2 className="font-semibold" style={{ color: 'var(--color-text-muted)' }}>Teams</h2>
+          <h2 className="font-semibold" style={{ color: 'var(--color-text-muted)' }}>Players for this Match</h2>
 
           <div className="p-4 rounded-lg border-2" style={{ borderColor: 'var(--color-score-a)', backgroundColor: 'var(--color-surface)' }}>
-            <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--color-score-a)' }}>Side A</p>
+            <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--color-score-a)' }}>
+              Side A {selectedCaptainA ? `(${selectedCaptainA.teamName})` : ''}
+            </p>
             {selectedCaptainA ? (
               <div className="space-y-3">
-                <div className="text-sm font-medium">Captain: {selectedCaptainA.name}</div>
-                <div className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Select players to include in today's match:</div>
+                <div className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                  Select {playMode === 'singles' ? '1 player' : '2 players'} for this match:
+                </div>
                 <div className="space-y-2">
                   {selectedCaptainAPlayers.map((player) => (
                     <label
@@ -281,7 +298,9 @@ export default function SetupPage() {
                         checked={operatorSelectedA.includes(player)}
                         onChange={(e) => {
                           if (e.target.checked) {
-                            setOperatorSelectedA([...operatorSelectedA, player]);
+                            const maxPlayers = playMode === 'singles' ? 1 : 2;
+                            const newSel = [...operatorSelectedA, player].slice(-maxPlayers);
+                            setOperatorSelectedA(newSel);
                           } else {
                             setOperatorSelectedA(operatorSelectedA.filter((p) => p !== player));
                           }
@@ -294,53 +313,43 @@ export default function SetupPage() {
                 </div>
               </div>
             ) : (
-              <>
-                {playMode === 'doubles' && (
+              <div className="space-y-2">
+                {(playMode === 'doubles' ? [0, 1] : [0]).map((i) => (
                   <input
+                    key={i}
                     type="text"
-                    value={teamAName}
-                    onChange={(e) => setTeamAName(e.target.value)}
-                    placeholder="Team name (optional)"
-                    className="w-full p-2 rounded border mb-2 font-semibold"
+                    value={teamAPlayers[i]}
+                    onChange={(e) => {
+                      const copy = [...teamAPlayers];
+                      copy[i] = e.target.value;
+                      setTeamAPlayers(copy);
+                    }}
+                    placeholder={`Player ${i + 1} name`}
+                    className="w-full p-2 rounded border text-sm"
                     style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
-                    aria-label="Team A name"
                   />
-                )}
-                {(playMode === 'doubles' ? [0, 1] : [0]).map((i) => {
-                  const allSelected = [...teamAPlayers, ...teamBPlayers];
-                  const available = PLAYERS.filter(
-                    (p) => !allSelected.includes(p) || teamAPlayers[i] === p
-                  );
-                  return (
-                    <select
-                      key={i}
-                      value={teamAPlayers[i]}
-                      onChange={(e) => {
-                        const copy = [...teamAPlayers];
-                        copy[i] = e.target.value;
-                        setTeamAPlayers(copy);
-                      }}
-                      className="w-full p-2 rounded border mb-1 text-sm"
-                      style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
-                      aria-label={`Team A player ${i + 1}`}
-                    >
-                      <option value="">— Select player {i + 1} —</option>
-                      {available.map((p) => (
-                        <option key={p} value={p}>{p}</option>
-                      ))}
-                    </select>
-                  );
-                })}
-              </>
+                ))}
+                <input
+                  type="text"
+                  value={teamAName}
+                  onChange={(e) => setTeamAName(e.target.value)}
+                  placeholder="Team name"
+                  className="w-full p-2 rounded border text-sm font-semibold"
+                  style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
+                />
+              </div>
             )}
           </div>
 
           <div className="p-4 rounded-lg border-2" style={{ borderColor: 'var(--color-score-b)', backgroundColor: 'var(--color-surface)' }}>
-            <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--color-score-b)' }}>Side B</p>
+            <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--color-score-b)' }}>
+              Side B {selectedCaptainB ? `(${selectedCaptainB.teamName})` : ''}
+            </p>
             {selectedCaptainB ? (
               <div className="space-y-3">
-                <div className="text-sm font-medium">Captain: {selectedCaptainB.name}</div>
-                <div className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Select players to include in today's match:</div>
+                <div className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                  Select {playMode === 'singles' ? '1 player' : '2 players'} for this match:
+                </div>
                 <div className="space-y-2">
                   {selectedCaptainBPlayers.map((player) => (
                     <label
@@ -353,7 +362,9 @@ export default function SetupPage() {
                         checked={operatorSelectedB.includes(player)}
                         onChange={(e) => {
                           if (e.target.checked) {
-                            setOperatorSelectedB([...operatorSelectedB, player]);
+                            const maxPlayers = playMode === 'singles' ? 1 : 2;
+                            const newSel = [...operatorSelectedB, player].slice(-maxPlayers);
+                            setOperatorSelectedB(newSel);
                           } else {
                             setOperatorSelectedB(operatorSelectedB.filter((p) => p !== player));
                           }
@@ -366,70 +377,86 @@ export default function SetupPage() {
                 </div>
               </div>
             ) : (
-              <>
-                {playMode === 'doubles' && (
+              <div className="space-y-2">
+                {(playMode === 'doubles' ? [0, 1] : [0]).map((i) => (
                   <input
+                    key={i}
                     type="text"
-                    value={teamBName}
-                    onChange={(e) => setTeamBName(e.target.value)}
-                    placeholder="Team name (optional)"
-                    className="w-full p-2 rounded border mb-2 font-semibold"
+                    value={teamBPlayers[i]}
+                    onChange={(e) => {
+                      const copy = [...teamBPlayers];
+                      copy[i] = e.target.value;
+                      setTeamBPlayers(copy);
+                    }}
+                    placeholder={`Player ${i + 1} name`}
+                    className="w-full p-2 rounded border text-sm"
                     style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
-                    aria-label="Team B name"
                   />
-                )}
-                {(playMode === 'doubles' ? [0, 1] : [0]).map((i) => {
-                  const allSelected = [...teamAPlayers, ...teamBPlayers];
-                  const available = PLAYERS.filter(
-                    (p) => !allSelected.includes(p) || teamBPlayers[i] === p
-                  );
-                  return (
-                    <select
-                      key={i}
-                      value={teamBPlayers[i]}
-                      onChange={(e) => {
-                        const copy = [...teamBPlayers];
-                        copy[i] = e.target.value;
-                        setTeamBPlayers(copy);
-                      }}
-                      className="w-full p-2 rounded border mb-1 text-sm"
-                      style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
-                      aria-label={`Team B player ${i + 1}`}
-                    >
-                      <option value="">— Select player {i + 1} —</option>
-                      {available.map((p) => (
-                        <option key={p} value={p}>{p}</option>
-                      ))}
-                    </select>
-                  );
-                })}
-              </>
+                ))}
+                <input
+                  type="text"
+                  value={teamBName}
+                  onChange={(e) => setTeamBName(e.target.value)}
+                  placeholder="Team name"
+                  className="w-full p-2 rounded border text-sm font-semibold"
+                  style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
+                />
+              </div>
             )}
           </div>
         </div>
 
-        {/* First Server */}
+        {/* First Server (determines which side serves first) */}
         <fieldset className="space-y-2">
           <legend className="font-semibold text-sm uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>
-            First Server
+            First Server (side known from this)
           </legend>
           <div className="flex gap-3">
             {(['A', 'B'] as const).map((t) => (
               <button
                 key={t}
                 onClick={() => setFirstServer(t)}
-                className={`flex-1 py-3 rounded-lg font-medium transition-colors border-2`}
+                className="flex-1 py-3 rounded-lg font-medium transition-colors border-2"
                 style={{
                   backgroundColor: firstServer === t ? (t === 'A' ? 'var(--color-score-a)' : 'var(--color-score-b)') : 'transparent',
                   borderColor: t === 'A' ? 'var(--color-score-a)' : 'var(--color-score-b)',
                   color: firstServer === t ? 'white' : 'var(--color-text)',
                 }}
               >
-                {t === 'A' ? teamAName : teamBName}
+                {t === 'A' ? (teamAName || 'Side A') : (teamBName || 'Side B')}
               </button>
             ))}
           </div>
         </fieldset>
+
+        {/* First Receiver (for doubles) */}
+        {playMode === 'doubles' && (
+          <fieldset className="space-y-2">
+            <legend className="font-semibold text-sm uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>
+              First Receiver (receiving team)
+            </legend>
+            <div className="flex gap-3">
+              {[0, 1].map((idx) => {
+                const receivingTeam = firstServer === 'A' ? 'B' : 'A';
+                const playerName = receivingTeam === 'A' ? teamAPlayers[idx] : teamBPlayers[idx];
+                return (
+                  <button
+                    key={idx}
+                    onClick={() => setFirstReceiverPlayerIndex(idx)}
+                    className="flex-1 py-3 rounded-lg font-medium transition-colors border-2"
+                    style={{
+                      backgroundColor: firstReceiverPlayerIndex === idx ? 'var(--color-primary)' : 'transparent',
+                      borderColor: 'var(--color-primary)',
+                      color: firstReceiverPlayerIndex === idx ? 'white' : 'var(--color-text)',
+                    }}
+                  >
+                    {playerName || `Player ${idx + 1}`}
+                  </button>
+                );
+              })}
+            </div>
+          </fieldset>
+        )}
 
         {/* Start Button */}
         <button

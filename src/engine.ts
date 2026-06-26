@@ -1,4 +1,4 @@
-import type { MatchConfig, MatchState, GameState, ServiceState, TeamId, Court } from './types';
+import type { MatchConfig, MatchState, GameState, ServiceState, TeamId, Court, Category } from './types';
 
 // Generate a unique ID
 export function generateId(): string {
@@ -133,7 +133,11 @@ export function createMatchState(
   config: MatchConfig,
   teamA: { name: string; players: string[] },
   teamB: { name: string; players: string[] },
-  firstServer: TeamId
+  firstServer: TeamId,
+  category: Category = 'mens_single',
+  teamAName: string = '',
+  teamBName: string = '',
+  firstReceiverPlayerIndex: number = 0
 ): MatchState {
   const teams = {
     A: {
@@ -164,6 +168,11 @@ export function createMatchState(
     startedAt: Date.now(),
     endedAt: null,
     endsSwapped: false,
+    category,
+    teamAName: teamAName || teamA.name,
+    teamBName: teamBName || teamB.name,
+    firstServer,
+    firstReceiverPlayerIndex,
   };
 }
 
@@ -278,6 +287,11 @@ function replayEvents(
     startedAt: startEvent?.timestamp ?? Date.now(),
     endedAt: null,
     endsSwapped: false,
+    category: config.category,
+    teamAName: teams.A.name,
+    teamBName: teams.B.name,
+    firstServer,
+    firstReceiverPlayerIndex: 0,
   };
 
   for (const event of events) {

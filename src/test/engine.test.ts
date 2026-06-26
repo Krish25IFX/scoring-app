@@ -18,6 +18,7 @@ const defaultConfig: MatchConfig = {
   winByTwo: true,
   pointCap: null,
   playMode: 'singles',
+  category: 'mens_single',
   changeEndsAfterGame: true,
   changeEndsInDecidingGame: true,
   changeEndsAtScore: 11,

@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { getAllMatches, deleteMatch, getFullMatch } from '../persistence';
+import { fetchAllMatches, deleteMatchApi } from '../api';
 import { exportMatchJSON, exportMatchCSV, exportMatchPDF } from '../export';
-import type { MatchSummary, TeamId } from '../types';
+import type { MatchSummary, MatchState, TeamId } from '../types';
 
 function formatDuration(ms: number | null) {
   if (!ms) return null;
@@ -18,15 +19,38 @@ export default function HistoryPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getAllMatches().then((m) => {
-      setMatches(m);
-      setLoading(false);
-    });
+    // Try server first, fall back to local IndexedDB
+    fetchAllMatches()
+      .then((serverMatches) => {
+        const summaries: MatchSummary[] = serverMatches.map((m: MatchState) => ({
+          id: m.id,
+          teams: m.teams,
+          gamesWon: m.gamesWon,
+          matchWinner: m.matchWinner,
+          config: m.config,
+          startedAt: m.startedAt,
+          endedAt: m.endedAt,
+          games: m.games,
+          category: m.category,
+          teamAName: m.teamAName,
+          teamBName: m.teamBName,
+        }));
+        setMatches(summaries.sort((a, b) => b.startedAt - a.startedAt));
+        setLoading(false);
+      })
+      .catch(() => {
+        // Fallback to local IndexedDB
+        getAllMatches().then((m) => {
+          setMatches(m);
+          setLoading(false);
+        });
+      });
   }, []);
 
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this match permanently?')) return;
     await deleteMatch(id);
+    await deleteMatchApi(id).catch(() => {});
     setMatches((prev) => prev.filter((m) => m.id !== id));
   };
 

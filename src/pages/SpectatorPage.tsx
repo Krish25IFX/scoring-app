@@ -1,12 +1,32 @@
-import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useMatch } from '../context/MatchContext';
+import { useEffect, useState } from 'react';
 import { useMatchTimer } from '../hooks/useMatchTimer';
-import type { TeamId } from '../types';
+import { fetchActiveMatch } from '../api';
+import type { MatchState, TeamId } from '../types';
 
 export default function SpectatorPage() {
-  const navigate = useNavigate();
-  const { match } = useMatch();
+  const [match, setMatch] = useState<MatchState | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // Poll server every 1.5 seconds for live updates
+  useEffect(() => {
+    let active = true;
+
+    const poll = async () => {
+      try {
+        const m = await fetchActiveMatch();
+        if (active) {
+          setMatch(m);
+          setLoading(false);
+        }
+      } catch {
+        // Server might be down, keep trying
+      }
+    };
+
+    poll(); // initial fetch
+    const interval = setInterval(poll, 1500);
+    return () => { active = false; clearInterval(interval); };
+  }, []);
 
   const timer = useMatchTimer(
     match?.startedAt ?? Date.now(),
@@ -14,11 +34,24 @@ export default function SpectatorPage() {
     match?.isPaused ?? false
   );
 
-  useEffect(() => {
-    if (!match) navigate('/');
-  }, [match, navigate]);
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: 'var(--color-bg)' }}>
+        <p style={{ color: 'var(--color-text-muted)' }}>Loading live score...</p>
+      </div>
+    );
+  }
 
-  if (!match) return null;
+  if (!match) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4" style={{ backgroundColor: 'var(--color-bg)' }}>
+        <div className="text-6xl">🏸</div>
+        <p className="text-xl font-semibold" style={{ color: 'var(--color-text-muted)' }}>No match in progress</p>
+        <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Waiting for a match to start...</p>
+        <div className="animate-pulse text-sm" style={{ color: 'var(--color-primary)' }}>● Listening for updates</div>
+      </div>
+    );
+  }
 
   const currentGame = match.games[match.currentGameIndex];
   const isOver = match.matchWinner !== null;

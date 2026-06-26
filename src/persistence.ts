@@ -43,6 +43,9 @@ export async function getAllMatches(): Promise<MatchSummary[]> {
       startedAt: m.startedAt,
       endedAt: m.endedAt,
       games: m.games,
+      category: m.category,
+      teamAName: m.teamAName,
+      teamBName: m.teamBName,
     }))
     .sort((a, b) => b.startedAt - a.startedAt);
 }
