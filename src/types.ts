@@ -93,6 +93,17 @@ export interface MatchState {
   teamBName: string;
   firstServer: TeamId;
   firstReceiverPlayerIndex: number; // for doubles: which player receives first
+  // Forfeit
+  forfeit?: ForfeitResult;
+}
+
+export interface ForfeitResult {
+  forfeited: true;
+  forfeitingTeam: TeamId | 'both'; // 'both' = neither team can play
+  gamePointsWinner: number; // 22 for normal forfeit, 0 for both
+  gamePointsLoser: number;  // 0
+  setPointsWinner: number;  // 1 for normal forfeit, 0 for both
+  setPointsLoser: number;   // 0
 }
 
 export interface MatchSummary {

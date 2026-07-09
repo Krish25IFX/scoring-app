@@ -1,187 +1,354 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useMatch } from '../context/MatchContext';
 import { CAPTAINS } from '../config/players';
-
-interface CaptainLoginState {
-  step: 'login' | 'selectPlayers';
-  password: string;
-  selectedCaptainId: string | null;
-  selectedPlayers: string[];
-  error: string;
-}
+import { isDeadlinePassed, getTodaySchedule, CAPTAIN_DEADLINE_HOUR, MAX_GAMES_PER_PLAYER_PER_OPPONENT } from '../config/schedule';
+import { CATEGORIES } from '../types';
+import type { Category, PlayMode } from '../types';
 
 export default function CaptainLoginPage() {
   const navigate = useNavigate();
-  const { setCaptainSelection } = useMatch();
-  const [state, setState] = useState<CaptainLoginState>({
-    step: 'login',
-    password: '',
-    selectedCaptainId: null,
-    selectedPlayers: [],
-    error: '',
-  });
+  const { setCaptainSelection, captainSelections, canPlayerPlay } = useMatch();
+  // TODO: re-enable deadline check after testing
+  // const deadlinePassed = isDeadlinePassed();
+  const deadlinePassed = false;
+  const todaySchedule = getTodaySchedule();
+
+  const [step, setStep] = useState<'login' | 'selectPlayers'>('login');
+  const [password, setPassword] = useState('');
+  const [selectedCaptainId, setSelectedCaptainId] = useState<string | null>(null);
+  const [error, setError] = useState('');
+  // Per-opponent selections: { opponentCaptainId: string[] }
+  const [selections, setSelections] = useState<Record<string, string[]>>({});
+  // Which opponent team is currently being configured
+  const [activeOpponentId, setActiveOpponentId] = useState<string | null>(null);
+  // Category selector - defaults to today's schedule or first available
+  const [selectedCategory, setSelectedCategory] = useState<Category>(
+    todaySchedule?.category ?? 'mens_double_1'
+  );
+
+  const currentCaptain = CAPTAINS.find((c) => c.id === selectedCaptainId);
+  const opponentTeams = CAPTAINS.filter((c) => c.id !== selectedCaptainId);
+
+  // Determine mode from selected category
+  const categoryMode: PlayMode = CATEGORIES.find((c) => c.id === selectedCategory)?.mode ?? 'doubles';
+  const maxPlayersPerOpponent = categoryMode === 'singles' ? 1 : 2;
+  const isFinal = todaySchedule?.isFinal ?? false;
 
   const handleBack = () => {
-    if (state.step === 'selectPlayers') {
-      setState({ ...state, step: 'login', password: '', error: '' });
-    } else if (state.step === 'login') {
+    if (activeOpponentId) {
+      setActiveOpponentId(null);
+    } else if (step === 'selectPlayers') {
+      setStep('login');
+      setPassword('');
+      setError('');
+    } else {
       navigate('/');
     }
   };
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    const captain = CAPTAINS.find((c) => c.password === state.password);
-
+    const captain = CAPTAINS.find((c) => c.password === password);
     if (!captain) {
-      setState({ ...state, error: 'Invalid password' });
+      setError('Invalid password');
       return;
     }
+    setSelectedCaptainId(captain.id);
+    // Load existing selections if any
+    const existing = captainSelections[captain.id];
+    if (existing && Object.keys(existing).length > 0) {
+      setSelections(existing);
+    }
+    setStep('selectPlayers');
+    setError('');
+  };
 
-    setState({
-      ...state,
-      step: 'selectPlayers',
-      selectedCaptainId: captain.id,
-      selectedPlayers: [],
-      error: '',
+  /** Count how many opponents a player is already selected against in current selections */
+  const getPlayerOpponentCount = (player: string): number => {
+    let count = 0;
+    for (const [, players] of Object.entries(selections)) {
+      if (players.includes(player)) count++;
+    }
+    return count;
+  };
+
+  /** Check if a player can still be selected for another opponent (max 2 opponents per category) */
+  const canSelectForOpponent = (player: string, opponentId: string): boolean => {
+    // Already selected for this opponent — allow toggle off
+    if (selections[opponentId]?.includes(player)) return true;
+    // Check total opponent count (max 2 per category from rules)
+    const count = getPlayerOpponentCount(player);
+    return count < MAX_GAMES_PER_PLAYER_PER_OPPONENT;
+  };
+
+  // Player toggle with max limit based on category mode
+  const handlePlayerToggle = (opponentId: string, player: string) => {
+    setSelections((prev) => {
+      const current = prev[opponentId] ?? [];
+      if (current.includes(player)) {
+        // Deselect
+        return { ...prev, [opponentId]: current.filter((p) => p !== player) };
+      }
+      // Check if player has hit the 2-opponent limit
+      let opponentCount = 0;
+      for (const [, players] of Object.entries(prev)) {
+        if (players.includes(player)) opponentCount++;
+      }
+      if (opponentCount >= MAX_GAMES_PER_PLAYER_PER_OPPONENT) {
+        return prev; // Block — player already at max opponents
+      }
+      // Enforce max player limit per match
+      if (current.length >= maxPlayersPerOpponent) {
+        // Replace: for singles just swap, for doubles keep last and add new
+        const keep = maxPlayersPerOpponent > 1 ? current.slice(-(maxPlayersPerOpponent - 1)) : [];
+        const updated = [...keep, player];
+        return { ...prev, [opponentId]: updated };
+      }
+      return { ...prev, [opponentId]: [...current, player] };
     });
   };
 
-  const handlePlayerToggle = (player: string) => {
-    setState((prev) => ({
-      ...prev,
-      selectedPlayers: prev.selectedPlayers.includes(player)
-        ? prev.selectedPlayers.filter((p) => p !== player)
-        : [...prev.selectedPlayers, player],
-    }));
-  };
-
-  const handleContinue = () => {
-    if (state.selectedPlayers.length === 0) {
-      setState({ ...state, error: 'Select at least one player' });
+  const handleSubmitAll = () => {
+    // Check exact player count for each opponent
+    const missing = opponentTeams.filter((t) => !selections[t.id] || selections[t.id].length !== maxPlayersPerOpponent);
+    if (missing.length > 0) {
+      setError(`Select exactly ${maxPlayersPerOpponent} player${maxPlayersPerOpponent > 1 ? 's' : ''} for: ${missing.map((t) => t.teamName).join(', ')}`);
       return;
     }
-
-    if (!state.selectedCaptainId) return;
-    setCaptainSelection(state.selectedCaptainId, state.selectedPlayers);
-    // Navigate back to home - captain selection is saved in context
+    if (!selectedCaptainId) return;
+    setCaptainSelection(selectedCaptainId, selections);
     navigate('/');
   };
 
-  const currentCaptain = CAPTAINS.find((c) => c.id === state.selectedCaptainId);
+  const completedCount = opponentTeams.filter((t) => selections[t.id] && selections[t.id].length === maxPlayersPerOpponent).length;
 
   return (
     <div className="min-h-screen p-4 md:p-8" style={{ backgroundColor: 'var(--color-bg)' }}>
       <div className="max-w-lg mx-auto space-y-6">
         {/* Header */}
         <div className="flex items-center gap-3">
-          <Link to="/" className="text-sm px-3 py-1.5 rounded-lg border" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-muted)' }}>
-            ← Home
-          </Link>
+          <button
+            onClick={handleBack}
+            className="text-sm px-3 py-1.5 rounded-lg border"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-muted)' }}
+          >
+            ← Back
+          </button>
           <h1 className="text-2xl font-black" style={{ color: 'var(--color-secondary)' }}>
-            {state.step === 'login' ? '🧑‍✈️ Captain Login' : `Captain: ${currentCaptain?.name}`}
+            {step === 'login' ? '🧑‍✈️ Captain Login' : `Captain: ${currentCaptain?.name}`}
           </h1>
         </div>
 
-        {/* Step 1: Select Team */}
-        {state.step === 'login' && (
+        {/* Step 1: Login */}
+        {step === 'login' && (
           <div className="space-y-4">
+            {deadlinePassed && (
+              <div className="p-3 rounded-lg text-center font-medium" style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444' }}>
+                ⚠️ Deadline passed! Submissions are locked after {CAPTAIN_DEADLINE_HOUR > 12 ? `${CAPTAIN_DEADLINE_HOUR - 12}:00 PM` : `${CAPTAIN_DEADLINE_HOUR}:00 AM`} on game day.
+              </div>
+            )}
+            {todaySchedule && (
+              <div className="p-3 rounded-lg text-center" style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+                <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Today's Match</p>
+                <p className="font-bold" style={{ color: 'var(--color-secondary)' }}>{todaySchedule.label} — {todaySchedule.categoryGroup.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase())}</p>
+                <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{todaySchedule.timing}</p>
+              </div>
+            )}
             <p className="text-center text-sm" style={{ color: 'var(--color-text-muted)' }}>
               Enter your captain password
             </p>
             <form onSubmit={handleLogin} className="space-y-3">
               <input
                 type="password"
-                value={state.password}
-                onChange={(e) => setState({ ...state, password: e.target.value })}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
                 placeholder="Password"
                 className="w-full p-3 rounded-lg border-2 text-center text-2xl tracking-widest"
                 style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface)', color: 'var(--color-text)' }}
                 autoFocus
               />
-              {state.error && (
+              {error && (
                 <div className="p-3 rounded-lg text-center font-medium" style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444' }}>
-                  {state.error}
+                  {error}
                 </div>
               )}
               <button
                 type="submit"
-                className="w-full py-3 rounded-lg text-white font-bold transition-transform hover:scale-105 active:scale-95"
+                disabled={deadlinePassed}
+                className="w-full py-3 rounded-lg text-white font-bold transition-transform hover:scale-105 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
                 style={{ backgroundColor: 'var(--color-secondary)' }}
               >
-                Login
+                {deadlinePassed ? 'Submissions Locked' : 'Login'}
               </button>
             </form>
-            <button
-              onClick={handleBack}
-              className="w-full py-2 rounded-lg border-2 font-medium"
-              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-            >
-              Back
-            </button>
           </div>
         )}
 
-        {/* Step 3: Select Players */}
-        {state.step === 'selectPlayers' && currentCaptain && (
+        {/* Step 2: Select Players Per Opponent Team */}
+        {step === 'selectPlayers' && currentCaptain && !activeOpponentId && (
           <div className="space-y-4">
-            <div>
-              <p className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text-muted)' }}>
-                Select players who will play today:
-              </p>
-              <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-                (You can also select yourself)
-              </p>
+            {/* Category Selector */}
+            <div className="p-3 rounded-lg border" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface)' }}>
+              <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>
+                Category for today
+              </label>
+              <select
+                value={selectedCategory}
+                onChange={(e) => {
+                  setSelectedCategory(e.target.value as Category);
+                  // Clear selections when category changes (mode might change)
+                  setSelections({});
+                }}
+                className="w-full mt-1 p-2 rounded-lg border text-sm font-medium"
+                style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
+              >
+                {CATEGORIES.map((cat) => (
+                  <option key={cat.id} value={cat.id}>
+                    {cat.label} ({cat.mode === 'singles' ? '1 player' : '2 players'})
+                  </option>
+                ))}
+              </select>
+              {todaySchedule && (
+                <p className="text-xs mt-1" style={{ color: 'var(--color-secondary)' }}>
+                  Scheduled: {CATEGORIES.find(c => c.id === todaySchedule.category)?.label}
+                </p>
+              )}
             </div>
 
-            <div className="space-y-2 max-h-64 overflow-y-auto">
-              {currentCaptain.players.map((player) => (
-                <label
-                  key={player}
-                  className="flex items-center gap-3 p-3 rounded-lg cursor-pointer"
-                  style={{
-                    backgroundColor: 'var(--color-surface)',
-                    borderColor: 'var(--color-border)',
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={state.selectedPlayers.includes(player)}
-                    onChange={() => handlePlayerToggle(player)}
-                    className="w-5 h-5 rounded"
-                  />
-                  <span className="font-medium">{player}</span>
-                </label>
-              ))}
+            <p className="text-sm font-semibold" style={{ color: 'var(--color-text-muted)' }}>
+              Select {maxPlayersPerOpponent} player{maxPlayersPerOpponent > 1 ? 's' : ''} per opponent ({categoryMode}) — {completedCount}/{opponentTeams.length} done
+            </p>
+
+            <div className="space-y-2">
+              {opponentTeams.map((opponent) => {
+                const selected = selections[opponent.id] ?? [];
+                const isDone = selected.length === maxPlayersPerOpponent;
+                return (
+                  <button
+                    key={opponent.id}
+                    onClick={() => { setActiveOpponentId(opponent.id); setError(''); }}
+                    className="w-full flex items-center justify-between p-4 rounded-lg border-2 text-left transition-all hover:scale-[1.01]"
+                    style={{
+                      borderColor: isDone ? 'var(--color-secondary)' : 'var(--color-border)',
+                      backgroundColor: 'var(--color-surface)',
+                    }}
+                  >
+                    <div>
+                      <span className="font-bold" style={{ color: 'var(--color-text)' }}>
+                        vs {opponent.teamName}
+                      </span>
+                      <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
+                        Captain: {opponent.name}
+                      </p>
+                    </div>
+                    <span className="text-sm font-medium" style={{ color: isDone ? 'var(--color-secondary)' : 'var(--color-text-muted)' }}>
+                      {isDone ? `${selected.length} selected ✓` : 'Tap to select'}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
 
-            <div className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
-              Selected: {state.selectedPlayers.length} player{state.selectedPlayers.length !== 1 ? 's' : ''}
-            </div>
-
-            {state.error && (
+            {error && (
               <div className="p-3 rounded-lg text-center font-medium" style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444' }}>
-                {state.error}
+                {error}
               </div>
             )}
 
             <button
-              onClick={handleContinue}
-              disabled={state.selectedPlayers.length === 0}
+              onClick={handleSubmitAll}
+              disabled={completedCount === 0}
               className="w-full py-3 rounded-lg text-white font-bold transition-transform hover:scale-105 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
               style={{ backgroundColor: 'var(--color-secondary)' }}
             >
-              ✓ Players Selected
+              ✓ Submit All Selections ({completedCount}/{opponentTeams.length})
             </button>
+          </div>
+        )}
 
-            <button
-              onClick={handleBack}
-              className="w-full py-2 rounded-lg border-2 font-medium"
-              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-            >
-              Back
-            </button>
+        {/* Step 2b: Player selection for a specific opponent */}
+        {step === 'selectPlayers' && currentCaptain && activeOpponentId && (
+          <div className="space-y-4">
+            {(() => {
+              const opponent = CAPTAINS.find((c) => c.id === activeOpponentId)!;
+              const selected = selections[activeOpponentId] ?? [];
+              return (
+                <>
+                  <div className="p-3 rounded-lg" style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+                    <p className="text-sm font-bold" style={{ color: 'var(--color-secondary)' }}>
+                      Selecting players vs {opponent.teamName}
+                    </p>
+                    <p className="text-xs mt-1" style={{ color: 'var(--color-text-muted)' }}>
+                      Select exactly <strong>{maxPlayersPerOpponent}</strong> player{maxPlayersPerOpponent > 1 ? 's' : ''} ({categoryMode})
+                    </p>
+                    <p className="text-xs mt-1 font-semibold" style={{ color: 'var(--color-text-muted)' }}>
+                      Category: {CATEGORIES.find(c => c.id === selectedCategory)?.label} • Max 2 games per player per opponent
+                    </p>
+                  </div>
+
+                  <div className="space-y-2 max-h-72 overflow-y-auto">
+                    {currentCaptain.players.map((player) => {
+                      const eligibleHistory = canPlayerPlay(player, selectedCategory, opponent.teamName, isFinal);
+                      const eligibleSelection = canSelectForOpponent(player, activeOpponentId);
+                      const eligible = eligibleHistory && eligibleSelection;
+                      const opponentCount = getPlayerOpponentCount(player);
+                      const isSelected = selected.includes(player);
+                      return (
+                      <label
+                        key={player}
+                        className="flex items-center gap-3 p-3 rounded-lg cursor-pointer border"
+                        style={{
+                          backgroundColor: isSelected ? 'rgba(var(--color-secondary-rgb, 99, 102, 241), 0.1)' : 'var(--color-surface)',
+                          borderColor: isSelected ? 'var(--color-secondary)' : 'var(--color-border)',
+                          opacity: eligible ? 1 : 0.4,
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          disabled={!eligible}
+                          onChange={() => handlePlayerToggle(activeOpponentId, player)}
+                          className="w-5 h-5 rounded"
+                        />
+                        <span className="font-medium" style={{ color: 'var(--color-text)' }}>{player}</span>
+                        <span className="ml-auto flex items-center gap-1">
+                          {opponentCount > 0 && (
+                            <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: 'var(--color-bg)', color: 'var(--color-text-muted)' }}>
+                              {opponentCount}/{MAX_GAMES_PER_PLAYER_PER_OPPONENT}
+                            </span>
+                          )}
+                          {!eligibleHistory && (
+                            <span className="text-xs font-medium" style={{ color: '#ef4444' }}>
+                              History limit
+                            </span>
+                          )}
+                          {eligibleHistory && !eligibleSelection && (
+                            <span className="text-xs font-medium" style={{ color: '#ef4444' }}>
+                              Max {MAX_GAMES_PER_PLAYER_PER_OPPONENT} opponents
+                            </span>
+                          )}
+                        </span>
+                      </label>
+                      );
+                    })}
+                  </div>
+
+                  <div className="text-sm" style={{ color: selected.length === maxPlayersPerOpponent ? 'var(--color-secondary)' : 'var(--color-text-muted)' }}>
+                    Selected: {selected.length}/{maxPlayersPerOpponent} player{maxPlayersPerOpponent !== 1 ? 's' : ''}
+                    {selected.length === maxPlayersPerOpponent && ' ✓'}
+                  </div>
+
+                  <button
+                    onClick={() => setActiveOpponentId(null)}
+                    className="w-full py-3 rounded-lg text-white font-bold transition-transform hover:scale-105 active:scale-95"
+                    style={{ backgroundColor: 'var(--color-secondary)' }}
+                  >
+                    ← Done with {opponent.teamName}
+                  </button>
+                </>
+              );
+            })()}
           </div>
         )}
       </div>

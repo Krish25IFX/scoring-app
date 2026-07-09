@@ -30,16 +30,16 @@ export async function deleteMatchApi(id: string): Promise<void> {
   await fetch(`${API_BASE}/matches/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
 
-export async function fetchCaptainSelections(): Promise<Record<string, string[]>> {
+export async function fetchCaptainSelections(): Promise<Record<string, Record<string, string[]>>> {
   const res = await fetch(`${API_BASE}/captain-selections`);
   const data = await res.json();
   return data.selections ?? {};
 }
 
-export async function postCaptainSelection(captainId: string, players: string[]): Promise<void> {
+export async function postCaptainSelection(captainId: string, selections: Record<string, string[]>): Promise<void> {
   await fetch(`${API_BASE}/captain-selections/${encodeURIComponent(captainId)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ players }),
+    body: JSON.stringify({ selections }),
   });
 }

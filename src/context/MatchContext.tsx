@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useCallback, useRef, useEffect, type ReactNode } from 'react';
-import type { MatchState, MatchConfig, TeamId, CaptainInfo, Category } from '../types';
+import type { MatchState, MatchConfig, TeamId, CaptainInfo, Category, ForfeitResult } from '../types';
 import { CAPTAINS } from '../config/players';
+import { CATEGORY_GROUP_MAP, MAX_GAMES_PER_PLAYER_PER_OPPONENT, MAX_GAMES_PER_PLAYER_FINAL, type CategoryGroup } from '../config/schedule';
 import {
   createMatchState,
   scorePoint,
@@ -9,7 +10,7 @@ import {
   switchEnds,
 } from '../engine';
 import { saveMatch } from '../persistence';
-import { postActiveMatch, deleteActiveMatch, fetchCaptainSelections, postCaptainSelection, fetchActiveMatch } from '../api';
+import { postActiveMatch, deleteActiveMatch, fetchCaptainSelections, postCaptainSelection, fetchActiveMatch, fetchAllMatches } from '../api';
 
 interface MatchContextType {
   match: MatchState | null;
@@ -17,11 +18,13 @@ interface MatchContextType {
   history: MatchState[];
   historyIndex: number;
   captains: CaptainInfo[];
-  captainSelections: Record<string, string[]>;
+  captainSelections: Record<string, Record<string, string[]>>;
   selectedCaptainAId: string | null;
   selectedCaptainBId: string | null;
-  setCaptainSelection: (captainId: string, players: string[]) => void;
+  setCaptainSelection: (captainId: string, selections: Record<string, string[]>) => void;
   setOperatorSelectedCaptain: (team: TeamId, captainId: string) => void;
+  getPlayerUsage: (player: string, categoryGroup: CategoryGroup, opponentTeamName: string) => number;
+  canPlayerPlay: (player: string, category: Category, opponentTeamName: string, isFinal: boolean) => boolean;
   
   startMatch: (
     config: MatchConfig,
@@ -40,6 +43,14 @@ interface MatchContextType {
   edit: (scoreA: number, scoreB: number) => void;
   swapEnds: () => void;
   resetMatch: () => void;
+  recordForfeit: (
+    category: Category,
+    teamAName: string,
+    teamBName: string,
+    forfeitingTeam: 'A' | 'B' | 'both',
+    isFinal: boolean
+  ) => void;
+  matchHistory: MatchState[];
 }
 
 const MatchContext = createContext<MatchContextType | null>(null);
@@ -56,25 +67,28 @@ export function MatchProvider({ children }: { children: ReactNode }) {
     teamName: c.teamName,
     players: c.players,
   }));
-  const [captainSelections, setCaptainSelections] = useState<Record<string, string[]>>({});
+  const [captainSelections, setCaptainSelections] = useState<Record<string, Record<string, string[]>>>({});
   const [selectedCaptainAId, setSelectedCaptainAId] = useState<string | null>(null);
   const [selectedCaptainBId, setSelectedCaptainBId] = useState<string | null>(null);
+  const [matchHistory, setMatchHistory] = useState<MatchState[]>([]);
   const historyRef = useRef({ history: [] as MatchState[], index: -1 });
 
-  // Load active match + captain selections from server on mount
+  // Load active match + captain selections + match history from server on mount
   useEffect(() => {
-    const timeout = setTimeout(() => setReady(true), 2000); // safety: mark ready after 2s even if server is unreachable
+    const timeout = setTimeout(() => setReady(true), 2000);
     Promise.all([
       fetchActiveMatch().catch(() => null),
       fetchCaptainSelections().catch(() => ({})),
-    ]).then(([activeMatch, selections]) => {
+      fetchAllMatches().catch(() => []),
+    ]).then(([activeMatch, selections, allMatches]) => {
       clearTimeout(timeout);
       if (activeMatch) {
         setMatch(activeMatch);
         setHistory([activeMatch]);
         setHistoryIndex(0);
       }
-      setCaptainSelections(selections as Record<string, string[]>);
+      setCaptainSelections(selections as Record<string, Record<string, string[]>>);
+      setMatchHistory(allMatches as MatchState[]);
       setReady(true);
     });
   }, []);
@@ -180,9 +194,9 @@ export function MatchProvider({ children }: { children: ReactNode }) {
     deleteActiveMatch().catch(console.error);
   }, []);
 
-  const setCaptainSelection = useCallback((captainId: string, players: string[]) => {
-    setCaptainSelections((prev) => ({ ...prev, [captainId]: players }));
-    postCaptainSelection(captainId, players).catch(console.error);
+  const setCaptainSelection = useCallback((captainId: string, selections: Record<string, string[]>) => {
+    setCaptainSelections((prev) => ({ ...prev, [captainId]: selections }));
+    postCaptainSelection(captainId, selections).catch(console.error);
   }, []);
 
   const setOperatorSelectedCaptain = useCallback((team: TeamId, captainId: string) => {
@@ -191,6 +205,100 @@ export function MatchProvider({ children }: { children: ReactNode }) {
     } else {
       setSelectedCaptainBId(captainId);
     }
+  }, []);
+
+  /** Count how many times a player has played in a category group against a specific opponent team */
+  const getPlayerUsage = useCallback((player: string, categoryGroup: CategoryGroup, opponentTeamName: string): number => {
+    let count = 0;
+    for (const m of matchHistory) {
+      if (!m.matchWinner && !m.forfeit) continue; // only count completed matches
+      const mGroup = CATEGORY_GROUP_MAP[m.category];
+      if (mGroup !== categoryGroup) continue;
+
+      // Check if this match involves the opponent team
+      const isOpponentA = m.teamAName === opponentTeamName;
+      const isOpponentB = m.teamBName === opponentTeamName;
+      if (!isOpponentA && !isOpponentB) continue;
+
+      // Check if the player was in the match
+      const teamAPlayers = m.teams.A.players.map((p) => p.name);
+      const teamBPlayers = m.teams.B.players.map((p) => p.name);
+      if (teamAPlayers.includes(player) || teamBPlayers.includes(player)) {
+        count++;
+      }
+    }
+    return count;
+  }, [matchHistory]);
+
+  /** Check if a player can still play (hasn't exceeded max games) */
+  const canPlayerPlay = useCallback((player: string, category: Category, opponentTeamName: string, isFinal: boolean): boolean => {
+    const group = CATEGORY_GROUP_MAP[category];
+    const usage = getPlayerUsage(player, group, opponentTeamName);
+    const max = isFinal ? MAX_GAMES_PER_PLAYER_FINAL : MAX_GAMES_PER_PLAYER_PER_OPPONENT;
+    return usage < max;
+  }, [getPlayerUsage]);
+
+  /** Record a forfeit match */
+  const recordForfeit = useCallback((
+    category: Category,
+    teamAName: string,
+    teamBName: string,
+    forfeitingTeam: 'A' | 'B' | 'both',
+    isFinal: boolean
+  ) => {
+    const forfeit: ForfeitResult = forfeitingTeam === 'both'
+      ? { forfeited: true, forfeitingTeam: 'both', gamePointsWinner: 0, gamePointsLoser: 0, setPointsWinner: 0, setPointsLoser: 0 }
+      : { forfeited: true, forfeitingTeam, gamePointsWinner: 22, gamePointsLoser: 0, setPointsWinner: 1, setPointsLoser: 0 };
+
+    const catMeta = ({ mens_single: 'singles', womens_double: 'doubles', mix_double: 'doubles', mens_double_1: 'doubles', mens_double_2: 'doubles', mens_double_3: 'doubles', mens_double_4: 'doubles', mens_double_5: 'doubles' } as const)[category];
+    const config: MatchConfig = {
+      bestOf: 1,
+      pointsToWin: [21],
+      winByTwo: false,
+      pointCap: null,
+      playMode: catMeta === 'singles' ? 'singles' : 'doubles',
+      category,
+      changeEndsAfterGame: false,
+      changeEndsInDecidingGame: false,
+      changeEndsAtScore: 0,
+    };
+
+    const winner: TeamId | null = forfeitingTeam === 'both' ? null : (forfeitingTeam === 'A' ? 'B' : 'A');
+    const now = Date.now();
+    const forfeitMatch: MatchState = {
+      id: `forfeit-${now}-${Math.random().toString(36).slice(2, 8)}`,
+      config,
+      teams: {
+        A: { id: 'A', name: teamAName, players: [{ name: 'Forfeit' }] },
+        B: { id: 'B', name: teamBName, players: [{ name: 'Forfeit' }] },
+      },
+      games: [{
+        gameIndex: 0,
+        scores: forfeitingTeam === 'both' ? { A: 0, B: 0 } : (forfeitingTeam === 'A' ? { A: 0, B: 22 } : { A: 22, B: 0 }),
+        serviceState: { servingTeam: 'A', serverPlayerIndex: 0, court: 'right' },
+        isComplete: true,
+        winner,
+      }],
+      currentGameIndex: 0,
+      gamesWon: forfeitingTeam === 'both' ? { A: 0, B: 0 } : (forfeitingTeam === 'A' ? { A: 0, B: 1 } : { A: 1, B: 0 }),
+      matchWinner: winner,
+      isPaused: false,
+      eventLog: [{ type: 'FORFEIT', timestamp: now, payload: { forfeitingTeam } }],
+      startedAt: now,
+      endedAt: now,
+      endsSwapped: false,
+      category,
+      teamAName,
+      teamBName,
+      firstServer: 'A',
+      firstReceiverPlayerIndex: 0,
+      forfeit,
+    };
+
+    // Save forfeit match
+    saveMatch(forfeitMatch).catch(console.error);
+    postActiveMatch(forfeitMatch).catch(console.error);
+    setMatchHistory((prev) => [forfeitMatch, ...prev]);
   }, []);
 
   return (
@@ -206,6 +314,8 @@ export function MatchProvider({ children }: { children: ReactNode }) {
         selectedCaptainBId,
         setCaptainSelection,
         setOperatorSelectedCaptain,
+        getPlayerUsage,
+        canPlayerPlay,
         startMatch,
         point,
         undo,
@@ -214,6 +324,8 @@ export function MatchProvider({ children }: { children: ReactNode }) {
         edit,
         swapEnds,
         resetMatch,
+        recordForfeit,
+        matchHistory,
       }}
     >
       {children}

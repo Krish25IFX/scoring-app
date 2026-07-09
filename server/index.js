@@ -108,11 +108,11 @@ app.get('/api/captain-selections', (req, res) => {
 });
 
 app.post('/api/captain-selections/:captainId', (req, res) => {
-  const { players } = req.body;
-  if (!Array.isArray(players)) {
-    return res.status(400).json({ error: 'players must be an array' });
+  const { selections } = req.body;
+  if (!selections || typeof selections !== 'object') {
+    return res.status(400).json({ error: 'selections must be an object keyed by opponent captain id' });
   }
-  upsertCaptainSelection.run(req.params.captainId, JSON.stringify(players), Date.now());
+  upsertCaptainSelection.run(req.params.captainId, JSON.stringify(selections), Date.now());
   res.json({ ok: true });
 });
 

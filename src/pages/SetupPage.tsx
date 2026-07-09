@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useMatch } from '../context/MatchContext';
 import type { MatchConfig, PlayMode, TeamId, Category } from '../types';
 import { CATEGORIES } from '../types';
+import { getTodaySchedule } from '../config/schedule';
 
 export default function SetupPage() {
   const navigate = useNavigate();
@@ -13,14 +14,16 @@ export default function SetupPage() {
     selectedCaptainAId,
     selectedCaptainBId,
     setOperatorSelectedCaptain,
+    canPlayerPlay,
+    recordForfeit,
   } = useMatch();
 
-  const [category, setCategory] = useState<Category>('mens_single');
+  const todaySchedule = getTodaySchedule();
+  const [category, setCategory] = useState<Category>(todaySchedule?.category ?? 'mens_single');
   const [bestOf, setBestOf] = useState(3);
   const [pointsPerGame, setPointsPerGame] = useState('11');
   const [winByTwo, setWinByTwo] = useState(true);
   const [pointCap, setPointCap] = useState(15);
-  const [playMode, setPlayMode] = useState<PlayMode>('singles');
   const [teamAName, setTeamAName] = useState('');
   const [teamBName, setTeamBName] = useState('');
   const [teamAPlayers, setTeamAPlayers] = useState(['', '']);
@@ -30,60 +33,50 @@ export default function SetupPage() {
   const [firstServer, setFirstServer] = useState<TeamId>('A');
   const [firstReceiverPlayerIndex, setFirstReceiverPlayerIndex] = useState(0);
 
-  // When category changes, update play mode
-  useEffect(() => {
-    const cat = CATEGORIES.find((c) => c.id === category);
-    if (cat) setPlayMode(cat.mode);
-  }, [category]);
+  // Derive play mode from category (no effect needed)
+  const playMode: PlayMode = CATEGORIES.find((c) => c.id === category)?.mode ?? 'singles';
 
-  const submittedCaptains = captains.filter((c) => (captainSelections[c.id] ?? []).length > 0);
+  const submittedCaptains = captains.filter((c) => {
+    const sel = captainSelections[c.id];
+    return sel && Object.keys(sel).length > 0;
+  });
   const selectedCaptainA = captains.find((c) => c.id === selectedCaptainAId) ?? null;
   const selectedCaptainB = captains.find((c) => c.id === selectedCaptainBId) ?? null;
-  const selectedCaptainAPlayers = selectedCaptainAId ? (captainSelections[selectedCaptainAId] ?? []) : [];
-  const selectedCaptainBPlayers = selectedCaptainBId ? (captainSelections[selectedCaptainBId] ?? []) : [];
 
-  // When captain is selected, initialize operator selection with their players
-  useEffect(() => {
-    if (selectedCaptainA && operatorSelectedA.length === 0) {
-      setOperatorSelectedA(selectedCaptainAPlayers);
-    }
-  }, [selectedCaptainA, selectedCaptainAPlayers, operatorSelectedA.length]);
+  // Get players selected specifically for the opponent team (memoized)
+  const selectedCaptainAPlayers = useMemo(() => (
+    (selectedCaptainAId && selectedCaptainBId)
+      ? (captainSelections[selectedCaptainAId]?.[selectedCaptainBId] ?? [])
+      : []
+  ), [selectedCaptainAId, selectedCaptainBId, captainSelections]);
 
-  useEffect(() => {
-    if (selectedCaptainB && operatorSelectedB.length === 0) {
-      setOperatorSelectedB(selectedCaptainBPlayers);
-    }
-  }, [selectedCaptainB, selectedCaptainBPlayers, operatorSelectedB.length]);
+  const selectedCaptainBPlayers = useMemo(() => (
+    (selectedCaptainBId && selectedCaptainAId)
+      ? (captainSelections[selectedCaptainBId]?.[selectedCaptainAId] ?? [])
+      : []
+  ), [selectedCaptainBId, selectedCaptainAId, captainSelections]);
 
-  // Update team players based on operator selection
-  useEffect(() => {
-    if (selectedCaptainA) {
-      if (playMode === 'singles') {
-        setTeamAPlayers([operatorSelectedA[0] || '', '']);
-        setTeamAName(selectedCaptainA.teamName);
-      } else {
-        const players = operatorSelectedA.slice(0, 2);
-        setTeamAPlayers(players.length === 2 ? (players as [string, string]) : [players[0] || '', players[1] || '']);
-        setTeamAName(selectedCaptainA.teamName);
-      }
-    }
-  }, [selectedCaptainA, playMode, operatorSelectedA]);
+  // Derive effective players directly from captain selections (no operator override needed if exact count)
+  const maxPlayers = playMode === 'singles' ? 1 : 2;
+  const effectiveAPlayers = selectedCaptainA
+    ? (selectedCaptainAPlayers.length <= maxPlayers ? selectedCaptainAPlayers : operatorSelectedA)
+    : [];
+  const effectiveBPlayers = selectedCaptainB
+    ? (selectedCaptainBPlayers.length <= maxPlayers ? selectedCaptainBPlayers : operatorSelectedB)
+    : [];
 
-  useEffect(() => {
-    if (selectedCaptainB) {
-      if (playMode === 'singles') {
-        setTeamBPlayers([operatorSelectedB[0] || '', '']);
-        setTeamBName(selectedCaptainB.teamName);
-      } else {
-        const players = operatorSelectedB.slice(0, 2);
-        setTeamBPlayers(players.length === 2 ? (players as [string, string]) : [players[0] || '', players[1] || '']);
-        setTeamBName(selectedCaptainB.teamName);
-      }
-    }
-  }, [selectedCaptainB, playMode, operatorSelectedB]);
+  // Derive team names and players for match start
+  const finalTeamAName = selectedCaptainA ? selectedCaptainA.teamName : teamAName;
+  const finalTeamBName = selectedCaptainB ? selectedCaptainB.teamName : teamBName;
+  const finalTeamAPlayers = selectedCaptainA
+    ? (playMode === 'singles' ? [effectiveAPlayers[0] || ''] : effectiveAPlayers.slice(0, 2))
+    : (playMode === 'singles' ? [teamAPlayers[0]] : teamAPlayers);
+  const finalTeamBPlayers = selectedCaptainB
+    ? (playMode === 'singles' ? [effectiveBPlayers[0] || ''] : effectiveBPlayers.slice(0, 2))
+    : (playMode === 'singles' ? [teamBPlayers[0]] : teamBPlayers);
 
-  const requiredA = playMode === 'singles' ? [teamAPlayers[0]] : [teamAPlayers[0], teamAPlayers[1]];
-  const requiredB = playMode === 'singles' ? [teamBPlayers[0]] : [teamBPlayers[0], teamBPlayers[1]];
+  const requiredA = playMode === 'singles' ? [finalTeamAPlayers[0]] : [finalTeamAPlayers[0], finalTeamAPlayers[1]];
+  const requiredB = playMode === 'singles' ? [finalTeamBPlayers[0]] : [finalTeamBPlayers[0], finalTeamBPlayers[1]];
   const canStart =
     requiredA.every(Boolean) &&
     requiredB.every(Boolean) &&
@@ -111,10 +104,10 @@ export default function SetupPage() {
       changeEndsAtScore: 0,
     };
 
-    const playersA = playMode === 'singles' ? [teamAPlayers[0]] : teamAPlayers;
-    const playersB = playMode === 'singles' ? [teamBPlayers[0]] : teamBPlayers;
-    const nameA = teamAName || playersA[0];
-    const nameB = teamBName || playersB[0];
+    const playersA = finalTeamAPlayers.filter(Boolean);
+    const playersB = finalTeamBPlayers.filter(Boolean);
+    const nameA = finalTeamAName || playersA[0];
+    const nameB = finalTeamBName || playersB[0];
 
     startMatch(
       config,
@@ -283,34 +276,59 @@ export default function SetupPage() {
             </p>
             {selectedCaptainA ? (
               <div className="space-y-3">
-                <div className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-                  Select {playMode === 'singles' ? '1 player' : '2 players'} for this match:
-                </div>
-                <div className="space-y-2">
-                  {selectedCaptainAPlayers.map((player) => (
-                    <label
-                      key={player}
-                      className="flex items-center gap-3 p-2 rounded cursor-pointer"
-                      style={{ backgroundColor: 'var(--color-bg)' }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={operatorSelectedA.includes(player)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            const maxPlayers = playMode === 'singles' ? 1 : 2;
-                            const newSel = [...operatorSelectedA, player].slice(-maxPlayers);
-                            setOperatorSelectedA(newSel);
-                          } else {
-                            setOperatorSelectedA(operatorSelectedA.filter((p) => p !== player));
-                          }
-                        }}
-                        className="w-4 h-4 rounded"
-                      />
-                      <span className="text-sm font-medium">{player}</span>
-                    </label>
-                  ))}
-                </div>
+                {/* If captain selected exact number needed, show locked display */}
+                {selectedCaptainAPlayers.length <= (playMode === 'singles' ? 1 : 2) ? (
+                  <div className="space-y-2">
+                    <div className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                      Player{playMode === 'doubles' ? 's' : ''} (from captain selection):
+                    </div>
+                    {selectedCaptainAPlayers.map((player) => (
+                      <div
+                        key={player}
+                        className="flex items-center gap-3 p-2 rounded"
+                        style={{ backgroundColor: 'var(--color-bg)' }}
+                      >
+                        <span className="text-sm font-bold" style={{ color: 'var(--color-score-a)' }}>✓</span>
+                        <span className="text-sm font-medium">{player}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  /* If more players than needed (shouldn't happen with new rules), show picker */
+                  <div className="space-y-2">
+                    <div className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                      Select {playMode === 'singles' ? '1 player' : '2 players'} for this match:
+                    </div>
+                    {selectedCaptainAPlayers.map((player) => {
+                      const eligible = selectedCaptainB ? canPlayerPlay(player, category, selectedCaptainB.teamName, todaySchedule?.isFinal ?? false) : true;
+                      return (
+                      <label
+                        key={player}
+                        className="flex items-center gap-3 p-2 rounded cursor-pointer"
+                        style={{ backgroundColor: 'var(--color-bg)', opacity: eligible ? 1 : 0.4 }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={operatorSelectedA.includes(player)}
+                          disabled={!eligible}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              const maxPlayers = playMode === 'singles' ? 1 : 2;
+                              const newSel = [...operatorSelectedA, player].slice(-maxPlayers);
+                              setOperatorSelectedA(newSel);
+                            } else {
+                              setOperatorSelectedA(operatorSelectedA.filter((p) => p !== player));
+                            }
+                          }}
+                          className="w-4 h-4 rounded"
+                        />
+                        <span className="text-sm font-medium">{player}</span>
+                        {!eligible && <span className="text-xs text-red-500 ml-auto">Max 2 games reached</span>}
+                      </label>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             ) : (
               <div className="space-y-2">
@@ -347,34 +365,59 @@ export default function SetupPage() {
             </p>
             {selectedCaptainB ? (
               <div className="space-y-3">
-                <div className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-                  Select {playMode === 'singles' ? '1 player' : '2 players'} for this match:
-                </div>
-                <div className="space-y-2">
-                  {selectedCaptainBPlayers.map((player) => (
-                    <label
-                      key={player}
-                      className="flex items-center gap-3 p-2 rounded cursor-pointer"
-                      style={{ backgroundColor: 'var(--color-bg)' }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={operatorSelectedB.includes(player)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            const maxPlayers = playMode === 'singles' ? 1 : 2;
-                            const newSel = [...operatorSelectedB, player].slice(-maxPlayers);
-                            setOperatorSelectedB(newSel);
-                          } else {
-                            setOperatorSelectedB(operatorSelectedB.filter((p) => p !== player));
-                          }
-                        }}
-                        className="w-4 h-4 rounded"
-                      />
-                      <span className="text-sm font-medium">{player}</span>
-                    </label>
-                  ))}
-                </div>
+                {/* If captain selected exact number needed, show locked display */}
+                {selectedCaptainBPlayers.length <= (playMode === 'singles' ? 1 : 2) ? (
+                  <div className="space-y-2">
+                    <div className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                      Player{playMode === 'doubles' ? 's' : ''} (from captain selection):
+                    </div>
+                    {selectedCaptainBPlayers.map((player) => (
+                      <div
+                        key={player}
+                        className="flex items-center gap-3 p-2 rounded"
+                        style={{ backgroundColor: 'var(--color-bg)' }}
+                      >
+                        <span className="text-sm font-bold" style={{ color: 'var(--color-score-b)' }}>✓</span>
+                        <span className="text-sm font-medium">{player}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  /* If more players than needed, show picker */
+                  <div className="space-y-2">
+                    <div className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                      Select {playMode === 'singles' ? '1 player' : '2 players'} for this match:
+                    </div>
+                    {selectedCaptainBPlayers.map((player) => {
+                      const eligible = selectedCaptainA ? canPlayerPlay(player, category, selectedCaptainA.teamName, todaySchedule?.isFinal ?? false) : true;
+                      return (
+                      <label
+                        key={player}
+                        className="flex items-center gap-3 p-2 rounded cursor-pointer"
+                        style={{ backgroundColor: 'var(--color-bg)', opacity: eligible ? 1 : 0.4 }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={operatorSelectedB.includes(player)}
+                          disabled={!eligible}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              const maxPlayers = playMode === 'singles' ? 1 : 2;
+                              const newSel = [...operatorSelectedB, player].slice(-maxPlayers);
+                              setOperatorSelectedB(newSel);
+                            } else {
+                              setOperatorSelectedB(operatorSelectedB.filter((p) => p !== player));
+                            }
+                          }}
+                          className="w-4 h-4 rounded"
+                        />
+                        <span className="text-sm font-medium">{player}</span>
+                        {!eligible && <span className="text-xs text-red-500 ml-auto">Max 2 games reached</span>}
+                      </label>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             ) : (
               <div className="space-y-2">
@@ -467,6 +510,63 @@ export default function SetupPage() {
         >
           {canStart ? '▶ Start Match' : 'Select captains and players to continue'}
         </button>
+
+        {/* Forfeit Section */}
+        {selectedCaptainAId && selectedCaptainBId && selectedCaptainAId !== selectedCaptainBId && (
+          <div className="p-4 rounded-lg border-2 space-y-3" style={{ borderColor: '#ef4444', backgroundColor: 'rgba(239, 68, 68, 0.05)' }}>
+            <p className="text-sm font-bold" style={{ color: '#ef4444' }}>⚠️ Forfeit / Walkover</p>
+            <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+              If a team can't play: 22 game points to opponent, 1 set point to opponent.<br/>
+              If both can't play: 0 game points, 0 set points to both.
+            </p>
+            <div className="flex gap-2 flex-wrap">
+              <button
+                onClick={() => {
+                  if (!confirm(`Forfeit: ${selectedCaptainA?.teamName} cannot play. Award win to ${selectedCaptainB?.teamName}?`)) return;
+                  recordForfeit(category, selectedCaptainA!.teamName, selectedCaptainB!.teamName, 'A', todaySchedule?.isFinal ?? false);
+                  alert('Forfeit recorded.');
+                }}
+                className="flex-1 py-2 px-3 rounded-lg text-white text-sm font-bold"
+                style={{ backgroundColor: '#ef4444' }}
+              >
+                {selectedCaptainA?.teamName || 'Team A'} Forfeits
+              </button>
+              <button
+                onClick={() => {
+                  if (!confirm(`Forfeit: ${selectedCaptainB?.teamName} cannot play. Award win to ${selectedCaptainA?.teamName}?`)) return;
+                  recordForfeit(category, selectedCaptainA!.teamName, selectedCaptainB!.teamName, 'B', todaySchedule?.isFinal ?? false);
+                  alert('Forfeit recorded.');
+                }}
+                className="flex-1 py-2 px-3 rounded-lg text-white text-sm font-bold"
+                style={{ backgroundColor: '#ef4444' }}
+              >
+                {selectedCaptainB?.teamName || 'Team B'} Forfeits
+              </button>
+              <button
+                onClick={() => {
+                  if (!confirm('Both teams cannot play? 0 points to both?')) return;
+                  recordForfeit(category, selectedCaptainA!.teamName, selectedCaptainB!.teamName, 'both', todaySchedule?.isFinal ?? false);
+                  alert('Both forfeit recorded.');
+                }}
+                className="w-full py-2 px-3 rounded-lg border-2 text-sm font-bold"
+                style={{ borderColor: '#ef4444', color: '#ef4444' }}
+              >
+                Both Teams Cannot Play
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Today's Schedule Info */}
+        {todaySchedule && (
+          <div className="p-3 rounded-lg border text-center" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface)' }}>
+            <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Today's Schedule</p>
+            <p className="font-bold text-sm" style={{ color: 'var(--color-secondary)' }}>
+              {todaySchedule.label} — {CATEGORIES.find(c => c.id === todaySchedule.category)?.label || todaySchedule.categoryGroup}
+            </p>
+            <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{todaySchedule.timing} {todaySchedule.isFinal ? '(FINAL)' : ''}</p>
+          </div>
+        )}
       </div>
     </div>
   );
