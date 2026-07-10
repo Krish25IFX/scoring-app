@@ -17,12 +17,14 @@ export default function SetupPage() {
     canPlayerPlay,
     recordForfeit,
     refreshMatchHistory,
+    refreshCaptainSelections,
   } = useMatch();
 
-  // Refresh match history so player eligibility checks are up-to-date
+  // Refresh match history + captain selections so data is up-to-date
   useEffect(() => {
     refreshMatchHistory();
-  }, [refreshMatchHistory]);
+    refreshCaptainSelections();
+  }, [refreshMatchHistory, refreshCaptainSelections]);
 
   const todaySchedule = getTodaySchedule();
   const [category, setCategory] = useState<Category>(todaySchedule?.category ?? 'mens_single');

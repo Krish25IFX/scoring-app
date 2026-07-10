@@ -36,29 +36,54 @@ function getEligiblePlayersByGender(players: string[], category: Category): stri
 
 export default function CaptainLoginPage() {
   const navigate = useNavigate();
-  const { setCaptainSelection, captainSelections, canPlayerPlay, refreshMatchHistory } = useMatch();
+  const { setCaptainSelection, captainSelections, canPlayerPlay, refreshMatchHistory, refreshCaptainSelections } = useMatch();
 
-  // Refresh match history from server on every mount so eligibility checks are up-to-date
+  // Refresh match history + captain selections from server on every mount
   useEffect(() => {
     refreshMatchHistory();
-  }, [refreshMatchHistory]);
+    refreshCaptainSelections();
+  }, [refreshMatchHistory, refreshCaptainSelections]);
   // TODO: re-enable deadline check after testing
   // const deadlinePassed = isDeadlinePassed();
   const deadlinePassed = false;
   const todaySchedule = getTodaySchedule();
 
-  const [step, setStep] = useState<'login' | 'selectPlayers'>('login');
   const [password, setPassword] = useState('');
-  const [selectedCaptainId, setSelectedCaptainId] = useState<string | null>(null);
+  const [selectedCaptainId, setSelectedCaptainId] = useState<string | null>(() => {
+    try { return localStorage.getItem('captain_draft_id'); } catch { return null; }
+  });
   const [error, setError] = useState('');
   // Per-opponent selections: { opponentCaptainId: string[] }
-  const [selections, setSelections] = useState<Record<string, string[]>>({});
+  const [selections, setSelections] = useState<Record<string, string[]>>(() => {
+    try {
+      const draft = localStorage.getItem('captain_draft_selections');
+      return draft ? JSON.parse(draft) : {};
+    } catch { return {}; }
+  });
   // Which opponent team is currently being configured
   const [activeOpponentId, setActiveOpponentId] = useState<string | null>(null);
   // Category selector - defaults to today's schedule or first available
-  const [selectedCategory, setSelectedCategory] = useState<Category>(
-    todaySchedule?.category ?? 'mens_double_1'
-  );
+  const [selectedCategory, setSelectedCategory] = useState<Category>(() => {
+    try {
+      const saved = localStorage.getItem('captain_draft_category');
+      return (saved as Category) || todaySchedule?.category || 'mens_double_1';
+    } catch { return todaySchedule?.category ?? 'mens_double_1'; }
+  });
+  // If we have a draft captain, skip login step
+  const [step, setStep] = useState<'login' | 'selectPlayers'>(() => {
+    try { return localStorage.getItem('captain_draft_id') ? 'selectPlayers' : 'login'; } catch { return 'login'; }
+  });
+
+  // Auto-save drafts to localStorage whenever selections change
+  useEffect(() => {
+    try {
+      if (selectedCaptainId) {
+        localStorage.setItem('captain_draft_id', selectedCaptainId);
+        localStorage.setItem('captain_draft_selections', JSON.stringify(selections));
+        localStorage.setItem('captain_draft_category', selectedCategory);
+      }
+    } catch { /* localStorage unavailable */ }
+  }, [selectedCaptainId, selections, selectedCategory]);
 
   const currentCaptain = CAPTAINS.find((c) => c.id === selectedCaptainId);
   const opponentTeams = CAPTAINS.filter((c) => c.id !== selectedCaptainId);
@@ -68,6 +93,14 @@ export default function CaptainLoginPage() {
   const maxPlayersPerOpponent = categoryMode === 'singles' ? 1 : 2;
   const isFinal = todaySchedule?.isFinal ?? false;
 
+  const clearDraft = () => {
+    try {
+      localStorage.removeItem('captain_draft_id');
+      localStorage.removeItem('captain_draft_selections');
+      localStorage.removeItem('captain_draft_category');
+    } catch { /* */ }
+  };
+
   const handleBack = () => {
     if (activeOpponentId) {
       setActiveOpponentId(null);
@@ -75,6 +108,7 @@ export default function CaptainLoginPage() {
       setStep('login');
       setPassword('');
       setError('');
+      clearDraft();
     } else {
       navigate('/');
     }
@@ -163,6 +197,7 @@ export default function CaptainLoginPage() {
     }
     if (!selectedCaptainId) return;
     setCaptainSelection(selectedCaptainId, selections);
+    clearDraft();
     navigate('/');
   };
 

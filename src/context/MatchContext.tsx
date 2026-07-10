@@ -52,6 +52,7 @@ interface MatchContextType {
   ) => void;
   matchHistory: MatchState[];
   refreshMatchHistory: () => Promise<void>;
+  refreshCaptainSelections: () => Promise<void>;
 }
 
 const MatchContext = createContext<MatchContextType | null>(null);
@@ -69,8 +70,12 @@ export function MatchProvider({ children }: { children: ReactNode }) {
     players: c.players,
   }));
   const [captainSelections, setCaptainSelections] = useState<Record<string, Record<string, string[]>>>({});
-  const [selectedCaptainAId, setSelectedCaptainAId] = useState<string | null>(null);
-  const [selectedCaptainBId, setSelectedCaptainBId] = useState<string | null>(null);
+  const [selectedCaptainAId, setSelectedCaptainAId] = useState<string | null>(() => {
+    try { return localStorage.getItem('operator_captainA'); } catch { return null; }
+  });
+  const [selectedCaptainBId, setSelectedCaptainBId] = useState<string | null>(() => {
+    try { return localStorage.getItem('operator_captainB'); } catch { return null; }
+  });
   const [matchHistory, setMatchHistory] = useState<MatchState[]>([]);
   const historyRef = useRef({ history: [] as MatchState[], index: -1 });
 
@@ -211,8 +216,10 @@ export function MatchProvider({ children }: { children: ReactNode }) {
   const setOperatorSelectedCaptain = useCallback((team: TeamId, captainId: string) => {
     if (team === 'A') {
       setSelectedCaptainAId(captainId);
+      try { localStorage.setItem('operator_captainA', captainId); } catch { /* */ }
     } else {
       setSelectedCaptainBId(captainId);
+      try { localStorage.setItem('operator_captainB', captainId); } catch { /* */ }
     }
   }, []);
 
@@ -320,6 +327,16 @@ export function MatchProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  /** Re-fetch captain selections from server */
+  const refreshCaptainSelections = useCallback(async () => {
+    try {
+      const selections = await fetchCaptainSelections();
+      setCaptainSelections(selections);
+    } catch {
+      // silently fail
+    }
+  }, []);
+
   return (
     <MatchContext.Provider
       value={{
@@ -346,6 +363,7 @@ export function MatchProvider({ children }: { children: ReactNode }) {
         recordForfeit,
         matchHistory,
         refreshMatchHistory,
+        refreshCaptainSelections,
       }}
     >
       {children}
