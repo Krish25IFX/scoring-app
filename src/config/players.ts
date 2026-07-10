@@ -50,8 +50,8 @@ export const CAPTAINS: Captain[] = [
   {
     id: 'captain6',
     name: 'Shubham Gupta',
-    teamName: 'Team Zeta',
-    password: 'zeta123',
+    teamName: 'Team Mavericks',
+    password: 'gupta123',
     players: ['Shubham Gupta', 'hari babu', 'Amisha SoniF', 'Dhairya Limbachiya', 'Shilp Patel', 'Henil Shah', 'Ria KangariwalaF', 'Raj Patel', 'Divyesh patel', 'Gunjan Seth' , 'Krish Viramgam (App Owner)' , 'Tanmay Rathod' , 'Dhriti DeyF'],
   },
 ];
