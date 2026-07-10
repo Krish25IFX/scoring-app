@@ -2,9 +2,37 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMatch } from '../context/MatchContext';
 import { CAPTAINS } from '../config/players';
-import { isDeadlinePassed, getTodaySchedule, CAPTAIN_DEADLINE_HOUR, MAX_GAMES_PER_PLAYER_PER_OPPONENT } from '../config/schedule';
+import {  getTodaySchedule, CAPTAIN_DEADLINE_HOUR, MAX_GAMES_PER_PLAYER_PER_OPPONENT } from '../config/schedule';
 import { CATEGORIES } from '../types';
 import type { Category, PlayMode } from '../types';
+
+/** Players whose name ends with 'F' are female */
+function isFemale(name: string): boolean {
+  return name.endsWith('F');
+}
+
+/**
+ * Get the gender requirement for a category:
+ * - 'male': only males allowed (mens_single, mens_double_*)
+ * - 'female': only females allowed (womens_double)
+ * - 'mix': 1 male + 1 female required (mix_double)
+ */
+function getGenderRequirement(category: Category): 'male' | 'female' | 'mix' {
+  if (category === 'womens_double') return 'female';
+  if (category === 'mix_double') return 'mix';
+  return 'male'; // mens_single, mens_double_*
+}
+
+/**
+ * Filter players eligible for a category based on gender.
+ * For 'mix', returns all players (validation handled during selection).
+ */
+function getEligiblePlayersByGender(players: string[], category: Category): string[] {
+  const req = getGenderRequirement(category);
+  if (req === 'male') return players.filter((p) => !isFemale(p));
+  if (req === 'female') return players.filter((p) => isFemale(p));
+  return players; // mix — show all, enforce 1M+1F at selection time
+}
 
 export default function CaptainLoginPage() {
   const navigate = useNavigate();
@@ -64,22 +92,23 @@ export default function CaptainLoginPage() {
     setError('');
   };
 
-  /** Count how many opponents a player is already selected against in current selections */
-  const getPlayerOpponentCount = (player: string): number => {
-    let count = 0;
-    for (const [, players] of Object.entries(selections)) {
-      if (players.includes(player)) count++;
-    }
-    return count;
-  };
+  const genderReq = getGenderRequirement(selectedCategory);
 
-  /** Check if a player can still be selected for another opponent (max 2 opponents per category) */
-  const canSelectForOpponent = (player: string, opponentId: string): boolean => {
-    // Already selected for this opponent — allow toggle off
-    if (selections[opponentId]?.includes(player)) return true;
-    // Check total opponent count (max 2 per category from rules)
-    const count = getPlayerOpponentCount(player);
-    return count < MAX_GAMES_PER_PLAYER_PER_OPPONENT;
+  /** For mix doubles: check if adding this player would violate the 1M+1F rule */
+  const canSelectForMix = (player: string, opponentId: string): boolean => {
+    if (genderReq !== 'mix') return true;
+    const current = selections[opponentId] ?? [];
+    // If already selected for this opponent, allow deselect
+    if (current.includes(player)) return true;
+    // If already full, will replace — allowed
+    if (current.length >= 2) return true;
+    // If 1 already selected, the next must be opposite gender
+    if (current.length === 1) {
+      const existingIsFemale = isFemale(current[0]);
+      const newIsFemale = isFemale(player);
+      return existingIsFemale !== newIsFemale; // must be opposite
+    }
+    return true; // first pick, anything goes
   };
 
   // Player toggle with max limit based on category mode
@@ -90,13 +119,11 @@ export default function CaptainLoginPage() {
         // Deselect
         return { ...prev, [opponentId]: current.filter((p) => p !== player) };
       }
-      // Check if player has hit the 2-opponent limit
-      let opponentCount = 0;
-      for (const [, players] of Object.entries(prev)) {
-        if (players.includes(player)) opponentCount++;
-      }
-      if (opponentCount >= MAX_GAMES_PER_PLAYER_PER_OPPONENT) {
-        return prev; // Block — player already at max opponents
+      // Mix doubles: enforce 1M + 1F
+      if (genderReq === 'mix' && current.length === 1) {
+        const existingIsFemale = isFemale(current[0]);
+        const newIsFemale = isFemale(player);
+        if (existingIsFemale === newIsFemale) return prev; // same gender, block
       }
       // Enforce max player limit per match
       if (current.length >= maxPlayersPerOpponent) {
@@ -115,6 +142,19 @@ export default function CaptainLoginPage() {
     if (missing.length > 0) {
       setError(`Select exactly ${maxPlayersPerOpponent} player${maxPlayersPerOpponent > 1 ? 's' : ''} for: ${missing.map((t) => t.teamName).join(', ')}`);
       return;
+    }
+    // For mix doubles, validate each selection has 1M + 1F
+    if (genderReq === 'mix') {
+      const invalid = opponentTeams.filter((t) => {
+        const sel = selections[t.id] ?? [];
+        if (sel.length !== 2) return true;
+        const females = sel.filter(isFemale).length;
+        return females !== 1; // must be exactly 1 female and 1 male
+      });
+      if (invalid.length > 0) {
+        setError(`Mix Double requires 1 male + 1 female for: ${invalid.map((t) => t.teamName).join(', ')}`);
+        return;
+      }
     }
     if (!selectedCaptainId) return;
     setCaptainSelection(selectedCaptainId, selections);
@@ -280,7 +320,10 @@ export default function CaptainLoginPage() {
                       Selecting players vs {opponent.teamName}
                     </p>
                     <p className="text-xs mt-1" style={{ color: 'var(--color-text-muted)' }}>
-                      Select exactly <strong>{maxPlayersPerOpponent}</strong> player{maxPlayersPerOpponent > 1 ? 's' : ''} ({categoryMode})
+                      {genderReq === 'mix'
+                        ? 'Select 1 male + 1 female'
+                        : `Select exactly ${maxPlayersPerOpponent} ${genderReq === 'female' ? 'female' : 'male'} player${maxPlayersPerOpponent > 1 ? 's' : ''}`
+                      } ({categoryMode})
                     </p>
                     <p className="text-xs mt-1 font-semibold" style={{ color: 'var(--color-text-muted)' }}>
                       Category: {CATEGORIES.find(c => c.id === selectedCategory)?.label} • Max 2 games per player per opponent
@@ -288,12 +331,12 @@ export default function CaptainLoginPage() {
                   </div>
 
                   <div className="space-y-2 max-h-72 overflow-y-auto">
-                    {currentCaptain.players.map((player) => {
+                    {getEligiblePlayersByGender(currentCaptain.players, selectedCategory).map((player) => {
                       const eligibleHistory = canPlayerPlay(player, selectedCategory, opponent.teamName, isFinal);
-                      const eligibleSelection = canSelectForOpponent(player, activeOpponentId);
-                      const eligible = eligibleHistory && eligibleSelection;
-                      const opponentCount = getPlayerOpponentCount(player);
+                      const eligibleMix = canSelectForMix(player, activeOpponentId);
+                      const eligible = eligibleHistory && eligibleMix;
                       const isSelected = selected.includes(player);
+                      const playerGender = isFemale(player) ? 'F' : 'M';
                       return (
                       <label
                         key={player}
@@ -311,21 +354,26 @@ export default function CaptainLoginPage() {
                           onChange={() => handlePlayerToggle(activeOpponentId, player)}
                           className="w-5 h-5 rounded"
                         />
-                        <span className="font-medium" style={{ color: 'var(--color-text)' }}>{player}</span>
+                        <span className="font-medium" style={{ color: 'var(--color-text)' }}>
+                          {player.replace(/F$/, '')}
+                        </span>
+                        {genderReq === 'mix' && (
+                          <span className="text-xs px-1.5 py-0.5 rounded font-bold" style={{
+                            backgroundColor: playerGender === 'F' ? '#fce7f3' : '#dbeafe',
+                            color: playerGender === 'F' ? '#be185d' : '#1d4ed8',
+                          }}>
+                            {playerGender}
+                          </span>
+                        )}
                         <span className="ml-auto flex items-center gap-1">
-                          {opponentCount > 0 && (
-                            <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: 'var(--color-bg)', color: 'var(--color-text-muted)' }}>
-                              {opponentCount}/{MAX_GAMES_PER_PLAYER_PER_OPPONENT}
-                            </span>
-                          )}
                           {!eligibleHistory && (
                             <span className="text-xs font-medium" style={{ color: '#ef4444' }}>
-                              History limit
+                              Max {MAX_GAMES_PER_PLAYER_PER_OPPONENT} vs this team
                             </span>
                           )}
-                          {eligibleHistory && !eligibleSelection && (
+                          {eligibleHistory && !eligibleMix && (
                             <span className="text-xs font-medium" style={{ color: '#ef4444' }}>
-                              Max {MAX_GAMES_PER_PLAYER_PER_OPPONENT} opponents
+                              Need opposite gender
                             </span>
                           )}
                         </span>

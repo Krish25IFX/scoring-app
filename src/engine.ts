@@ -74,7 +74,9 @@ export function getNextServiceState(
   currentService: ServiceState,
   rallyWinner: TeamId,
   scores: Record<TeamId, number>,
-  config: MatchConfig
+  config: MatchConfig,
+  firstServer: TeamId = 'A',
+  firstReceiverPlayerIndex: number = 0
 ): ServiceState {
   if (config.playMode === 'singles') {
     // In singles: if server wins, they keep serve; court switches based on server's score.
@@ -101,11 +103,24 @@ export function getNextServiceState(
       };
     } else {
       // Service passes to receiving team
-      // The player in the correct court for the new serving team's score receives serve
+      // Determine which player serves based on score parity and initial arrangement
+      const winnerScore = scores[rallyWinner];
+      let serverPlayerIndex: number;
+      
+      if (rallyWinner === firstServer) {
+        // This is the team that served first in the game — player 0 was first server
+        serverPlayerIndex = winnerScore % 2 === 0 ? 0 : 1;
+      } else {
+        // This is the team that received first — use firstReceiverPlayerIndex
+        // Even score: player in right court serves (= firstReceiverPlayerIndex)
+        // Odd score: player in left court serves (= 1 - firstReceiverPlayerIndex)
+        serverPlayerIndex = winnerScore % 2 === 0 ? firstReceiverPlayerIndex : (1 - firstReceiverPlayerIndex);
+      }
+
       return {
         servingTeam: rallyWinner,
-        serverPlayerIndex: scores[rallyWinner] % 2 === 0 ? 0 : 1,
-        court: getServiceCourt(scores[rallyWinner]),
+        serverPlayerIndex,
+        court: getServiceCourt(winnerScore),
       };
     }
   }
@@ -189,7 +204,9 @@ export function scorePoint(state: MatchState, team: TeamId): MatchState {
     currentGame.serviceState,
     team,
     newScores,
-    state.config
+    state.config,
+    state.firstServer,
+    state.firstReceiverPlayerIndex
   );
 
   const winner = checkGameWon(newScores, state.config, state.currentGameIndex);
