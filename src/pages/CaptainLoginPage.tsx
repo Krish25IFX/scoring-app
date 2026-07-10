@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMatch } from '../context/MatchContext';
 import { CAPTAINS } from '../config/players';
@@ -36,7 +36,12 @@ function getEligiblePlayersByGender(players: string[], category: Category): stri
 
 export default function CaptainLoginPage() {
   const navigate = useNavigate();
-  const { setCaptainSelection, captainSelections, canPlayerPlay } = useMatch();
+  const { setCaptainSelection, captainSelections, canPlayerPlay, refreshMatchHistory } = useMatch();
+
+  // Refresh match history from server on every mount so eligibility checks are up-to-date
+  useEffect(() => {
+    refreshMatchHistory();
+  }, [refreshMatchHistory]);
   // TODO: re-enable deadline check after testing
   // const deadlinePassed = isDeadlinePassed();
   const deadlinePassed = false;

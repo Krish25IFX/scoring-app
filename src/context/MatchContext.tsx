@@ -51,6 +51,7 @@ interface MatchContextType {
     isFinal: boolean
   ) => void;
   matchHistory: MatchState[];
+  refreshMatchHistory: () => Promise<void>;
 }
 
 const MatchContext = createContext<MatchContextType | null>(null);
@@ -109,6 +110,14 @@ export function MatchProvider({ children }: { children: ReactNode }) {
     saveMatch(state).catch(console.error);
     // Sync to server so spectators on other devices can see it
     postActiveMatch(state).catch(console.error);
+    // When a match completes, add it to matchHistory so player usage tracking stays current
+    if (state.matchWinner) {
+      setMatchHistory((prev) => {
+        // Avoid duplicates
+        if (prev.some((m) => m.id === state.id)) return prev;
+        return [state, ...prev];
+      });
+    }
   }, []);
 
   const startMatch = useCallback(
@@ -301,6 +310,16 @@ export function MatchProvider({ children }: { children: ReactNode }) {
     setMatchHistory((prev) => [forfeitMatch, ...prev]);
   }, []);
 
+  /** Re-fetch match history from server (ensures captain page has fresh data) */
+  const refreshMatchHistory = useCallback(async () => {
+    try {
+      const allMatches = await fetchAllMatches();
+      setMatchHistory(allMatches);
+    } catch {
+      // silently fail — use whatever we have
+    }
+  }, []);
+
   return (
     <MatchContext.Provider
       value={{
@@ -326,6 +345,7 @@ export function MatchProvider({ children }: { children: ReactNode }) {
         resetMatch,
         recordForfeit,
         matchHistory,
+        refreshMatchHistory,
       }}
     >
       {children}

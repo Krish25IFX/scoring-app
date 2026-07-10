@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useMatch } from '../context/MatchContext';
 import type { MatchConfig, PlayMode, TeamId, Category } from '../types';
@@ -16,7 +16,13 @@ export default function SetupPage() {
     setOperatorSelectedCaptain,
     canPlayerPlay,
     recordForfeit,
+    refreshMatchHistory,
   } = useMatch();
+
+  // Refresh match history so player eligibility checks are up-to-date
+  useEffect(() => {
+    refreshMatchHistory();
+  }, [refreshMatchHistory]);
 
   const todaySchedule = getTodaySchedule();
   const [category, setCategory] = useState<Category>(todaySchedule?.category ?? 'mens_single');
