@@ -6,8 +6,9 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Database setup
-const db = new Database(path.join(__dirname, 'tournament.db'));
+// Database setup — use DB_PATH env for container deployments
+const dbPath = process.env.DB_PATH || path.join(__dirname, 'tournament.db');
+const db = new Database(dbPath);
 db.pragma('journal_mode = WAL');
 
 db.exec(`
@@ -49,7 +50,11 @@ const upsertCaptainSelection = db.prepare(`
 const getAllCaptainSelections = db.prepare('SELECT captain_id, players FROM captain_selections');
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: process.env.CORS_ORIGIN || '*',
+  methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type'],
+}));
 app.use(express.json({ limit: '5mb' }));
 
 // ─── Active Match (live scoring) ───

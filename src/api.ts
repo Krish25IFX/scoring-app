@@ -1,6 +1,8 @@
 import type { MatchState } from './types';
 
-const API_BASE = '/api';
+// In production (GitHub Pages), use the deployed backend URL.
+// In development, Vite proxy handles /api → localhost:3001.
+const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
 export async function fetchActiveMatch(): Promise<MatchState | null> {
   const res = await fetch(`${API_BASE}/active-match`);
