@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useMatch } from '../context/MatchContext';
 import type { MatchConfig, PlayMode, TeamId, Category } from '../types';
@@ -27,7 +27,7 @@ export default function SetupPage() {
   }, [refreshMatchHistory, refreshCaptainSelections]);
 
   const todaySchedule = getTodaySchedule();
-  const [category, setCategory] = useState<Category>(todaySchedule?.category ?? 'mens_single');
+  const category: Category = todaySchedule?.category ?? 'mens_single';
   const [bestOf, setBestOf] = useState(3);
   const [pointsPerGame, setPointsPerGame] = useState('11');
   const [winByTwo, setWinByTwo] = useState(true);
@@ -53,17 +53,13 @@ export default function SetupPage() {
   const selectedCaptainB = captains.find((c) => c.id === selectedCaptainBId) ?? null;
 
   // Get players selected specifically for the opponent team IN THIS CATEGORY
-  const selectedCaptainAPlayers = useMemo(() => (
-    (selectedCaptainAId && selectedCaptainBId)
-      ? (captainSelections[selectedCaptainAId]?.[category]?.[selectedCaptainBId] ?? [])
-      : []
-  ), [selectedCaptainAId, selectedCaptainBId, captainSelections, category]);
+  const selectedCaptainAPlayers = (selectedCaptainAId && selectedCaptainBId)
+    ? (captainSelections[selectedCaptainAId]?.[category]?.[selectedCaptainBId] ?? [])
+    : [];
 
-  const selectedCaptainBPlayers = useMemo(() => (
-    (selectedCaptainBId && selectedCaptainAId)
-      ? (captainSelections[selectedCaptainBId]?.[category]?.[selectedCaptainAId] ?? [])
-      : []
-  ), [selectedCaptainBId, selectedCaptainAId, captainSelections, category]);
+  const selectedCaptainBPlayers = (selectedCaptainBId && selectedCaptainAId)
+    ? (captainSelections[selectedCaptainBId]?.[category]?.[selectedCaptainAId] ?? [])
+    : [];
 
   // Derive effective players directly from captain selections (no operator override needed if exact count)
   const maxPlayers = playMode === 'singles' ? 1 : 2;
@@ -191,21 +187,16 @@ export default function SetupPage() {
             </div>
           </div>
         </div>
-        <fieldset className="space-y-2">
-          <legend className="font-semibold text-sm uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>
-            Category
-          </legend>
-          <select
-            value={category}
-            onChange={(e) => setCategory(e.target.value as Category)}
-            className="w-full p-3 rounded-lg border-2"
-            style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface)', color: 'var(--color-text)' }}
-          >
-            {CATEGORIES.map((cat) => (
-              <option key={cat.id} value={cat.id}>{cat.label} ({cat.mode})</option>
-            ))}
-          </select>
-        </fieldset>
+        {/* Category — auto-set from today's schedule */}
+        <div className="p-3 rounded-lg border-2" style={{ borderColor: 'var(--color-secondary)', backgroundColor: 'var(--color-surface)' }}>
+          <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>Today's Category</p>
+          <p className="text-lg font-bold mt-1" style={{ color: 'var(--color-secondary)' }}>
+            {CATEGORIES.find((c) => c.id === category)?.label ?? category}
+          </p>
+          <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
+            {playMode === 'singles' ? 'Singles (1 player)' : 'Doubles (2 players)'} {todaySchedule ? `· ${todaySchedule.timing}` : ''}
+          </p>
+        </div>
 
         {/* Games */}
         <div className="grid grid-cols-2 gap-4">

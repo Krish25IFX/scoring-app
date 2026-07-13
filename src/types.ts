@@ -13,14 +13,14 @@ export type Category =
   | 'mens_double_5';
 
 export const CATEGORIES: { id: Category; label: string; mode: PlayMode }[] = [
-  { id: 'mens_single', label: "Men's Single", mode: 'singles' },
-  { id: 'womens_double', label: "Women's Double", mode: 'doubles' },
-  { id: 'mix_double', label: 'Mix Double', mode: 'doubles' },
-  { id: 'mens_double_1', label: "Men's Double 1", mode: 'doubles' },
-  { id: 'mens_double_2', label: "Men's Double 2", mode: 'doubles' },
-  { id: 'mens_double_3', label: "Men's Double 3", mode: 'doubles' },
-  { id: 'mens_double_4', label: "Men's Double 4", mode: 'doubles' },
-  { id: 'mens_double_5', label: "Men's Double 5", mode: 'doubles' },
+  { id: 'mens_single', label: "Men's Single (17th Jul)", mode: 'singles' },
+  { id: 'womens_double', label: "Women's Double (22nd Jul)", mode: 'doubles' },
+  { id: 'mix_double', label: "Mix Double (15th Jul)", mode: 'doubles' },
+  { id: 'mens_double_1', label: "Men's Double (13th Jul)", mode: 'doubles' },
+  { id: 'mens_double_2', label: "Men's Double (14th Jul)", mode: 'doubles' },
+  { id: 'mens_double_3', label: "Men's Double (16th Jul)", mode: 'doubles' },
+  { id: 'mens_double_4', label: "Men's Double (20th Jul)", mode: 'doubles' },
+  { id: 'mens_double_5', label: "Men's Double (21st Jul)", mode: 'doubles' },
 ];
 
 export interface Player {
