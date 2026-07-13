@@ -16,7 +16,7 @@ export const CAPTAINS: Captain[] = [
     id: 'captain1',
     name: 'Shubham Bhatt',
     teamName: 'Hawa Bazz',
-    password: 'shubham123',
+    password: 'Hawa@24',
     players: ['Shubham Bhatt', 'Deepak Choudhary', 'Kalani Karteek', 'Rohan Patel', 'Tigunait Anchal AvdheshF', 'Yogesh Gusain', 'Pranavkumar Badgujar', 'Sandip Kanzariya', 'Nevil Sutaria', 'Chirag Modi' , 'Karan Rajendrakumar Patel' , 'Zankat Nensee KeeshorbhaiF' ],
   },
   {

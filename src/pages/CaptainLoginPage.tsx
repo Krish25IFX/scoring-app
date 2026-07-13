@@ -313,20 +313,28 @@ export default function CaptainLoginPage() {
                     onClick={() => { setActiveOpponentId(opponent.id); setError(''); }}
                     className="w-full flex items-center justify-between p-4 rounded-lg border-2 text-left transition-all hover:scale-[1.01]"
                     style={{
-                      borderColor: isDone ? 'var(--color-secondary)' : 'var(--color-border)',
-                      backgroundColor: 'var(--color-surface)',
+                      borderColor: isDone ? '#22c55e' : 'var(--color-border)',
+                      backgroundColor: isDone ? 'rgba(34, 197, 94, 0.1)' : 'var(--color-surface)',
                     }}
                   >
                     <div>
-                      <span className="font-bold" style={{ color: 'var(--color-text)' }}>
+                      <span className="font-bold" style={{ color: isDone ? '#16a34a' : 'var(--color-text)' }}>
                         vs {opponent.teamName}
                       </span>
                       <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
                         Captain: {opponent.name}
                       </p>
+                      {isDone && (
+                        <p className="text-xs mt-0.5 font-medium" style={{ color: '#16a34a' }}>
+                          {selected.join(', ')}
+                        </p>
+                      )}
                     </div>
-                    <span className="text-sm font-medium" style={{ color: isDone ? 'var(--color-secondary)' : 'var(--color-text-muted)' }}>
-                      {isDone ? `${selected.length} selected ✓` : 'Tap to select'}
+                    <span className="text-sm font-bold px-2 py-1 rounded-md" style={{
+                      color: isDone ? '#fff' : 'var(--color-text-muted)',
+                      backgroundColor: isDone ? '#22c55e' : 'transparent',
+                    }}>
+                      {isDone ? `✓` : 'Select'}
                     </span>
                   </button>
                 );
