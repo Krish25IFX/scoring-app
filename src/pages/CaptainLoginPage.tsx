@@ -38,10 +38,12 @@ export default function CaptainLoginPage() {
   const navigate = useNavigate();
   const { setCaptainSelection, captainSelections, canPlayerPlay, refreshMatchHistory, refreshCaptainSelections } = useMatch();
 
+  const [dataLoaded, setDataLoaded] = useState(false);
+
   // Refresh match history + captain selections from server on every mount
   useEffect(() => {
     refreshMatchHistory();
-    refreshCaptainSelections();
+    refreshCaptainSelections().then(() => setDataLoaded(true)).catch(() => setDataLoaded(true));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const todaySchedule = getTodaySchedule();
   // Deadline check: lock submissions only for today's scheduled category
@@ -126,12 +128,22 @@ export default function CaptainLoginPage() {
       return;
     }
     setSelectedCaptainId(captain.id);
-    // Load existing selections for the current category
+    // Load existing selections for the current category from server data
     const existing = captainSelections[captain.id]?.[selectedCategory];
     if (existing && Object.keys(existing).length > 0) {
       setSelections(existing);
     } else {
-      setSelections({});
+      // If server data not available yet, try re-fetching
+      if (!dataLoaded) {
+        refreshCaptainSelections().then(() => {
+          const fresh = captainSelections[captain.id]?.[selectedCategory];
+          if (fresh && Object.keys(fresh).length > 0) {
+            setSelections(fresh);
+          }
+        });
+      } else {
+        setSelections({});
+      }
     }
     setStep('selectPlayers');
     setError('');
@@ -273,6 +285,11 @@ export default function CaptainLoginPage() {
         {/* Step 2: Select Players Per Opponent Team */}
         {step === 'selectPlayers' && currentCaptain && !activeOpponentId && (
           <div className="space-y-4">
+            {!dataLoaded && (
+              <div className="p-3 rounded-lg text-center" style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+                <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Loading selections from server...</p>
+              </div>
+            )}
             {/* Category Selector */}
             <div className="p-3 rounded-lg border" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface)' }}>
               <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>
