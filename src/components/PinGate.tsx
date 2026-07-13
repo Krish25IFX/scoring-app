@@ -2,9 +2,28 @@ import { useState, useEffect } from 'react';
 import { OPERATOR_PIN, CAPTAINS } from '../config/players';
 import { useMatch } from '../context/MatchContext';
 import { getTodaySchedule } from '../config/schedule';
+import { fetchCaptainSelections } from '../api';
 
 const SESSION_KEY = 'operator_auth';
 const OVERRIDE_PIN = '0000';
+
+function checkAllSubmitted(selections: Record<string, Record<string, Record<string, string[]>>>): boolean {
+  const todaySchedule = getTodaySchedule();
+  const todayCategory = todaySchedule?.category;
+  if (!todayCategory) return true; // No match today
+
+  return CAPTAINS.every((captain) => {
+    const captainData = selections[captain.id];
+    if (!captainData) return false;
+    const categoryData = captainData[todayCategory];
+    if (!categoryData) return false;
+    const opponents = CAPTAINS.filter((c) => c.id !== captain.id);
+    return opponents.every((opp) => {
+      const players = categoryData[opp.id];
+      return players && players.length > 0;
+    });
+  });
+}
 
 export default function PinGate({ children }: { children: React.ReactNode }) {
   const [pin, setPin] = useState('');
@@ -12,7 +31,8 @@ export default function PinGate({ children }: { children: React.ReactNode }) {
   const [authed, setAuthed] = useState(
     () => sessionStorage.getItem(SESSION_KEY) === 'true'
   );
-  const { captainSelections, refreshCaptainSelections, ready } = useMatch();
+  const [checking, setChecking] = useState(false);
+  const { captainSelections, refreshCaptainSelections } = useMatch();
 
   useEffect(() => {
     if (!authed) refreshCaptainSelections();
@@ -20,26 +40,24 @@ export default function PinGate({ children }: { children: React.ReactNode }) {
 
   if (authed) return <>{children}</>;
 
+  const allCaptainsSubmitted = checkAllSubmitted(captainSelections);
+
+  // Figure out which captains are missing
   const todaySchedule = getTodaySchedule();
   const todayCategory = todaySchedule?.category;
+  const missingCaptains = !todayCategory ? [] : CAPTAINS.filter((captain) => {
+    const captainData = captainSelections[captain.id];
+    if (!captainData) return true;
+    const categoryData = captainData[todayCategory];
+    if (!categoryData) return true;
+    const opponents = CAPTAINS.filter((c) => c.id !== captain.id);
+    return !opponents.every((opp) => {
+      const players = categoryData[opp.id];
+      return players && players.length > 0;
+    });
+  });
 
-  // Only check submissions after data has loaded from server
-  const allCaptainsSubmitted = !ready ? false : (todayCategory
-    ? CAPTAINS.every((captain) => {
-        const captainData = captainSelections[captain.id];
-        if (!captainData) return false;
-        const categoryData = captainData[todayCategory];
-        if (!categoryData) return false;
-        // Must have selections against ALL other captains
-        const opponents = CAPTAINS.filter((c) => c.id !== captain.id);
-        return opponents.every((opp) => {
-          const players = categoryData[opp.id];
-          return players && players.length > 0;
-        });
-      })
-    : true); // No match today — allow access
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     // Override PIN always works
@@ -49,39 +67,31 @@ export default function PinGate({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    if (pin === OPERATOR_PIN) {
-      if (!ready) {
-        setError('Still loading data from server. Please wait a moment and try again.');
-        setPin('');
-        return;
-      }
-      if (!allCaptainsSubmitted) {
-        setError('Not all captains have submitted players for today\'s match. Use override PIN (0000) to bypass.');
-        setPin('');
-        return;
-      }
-      sessionStorage.setItem(SESSION_KEY, 'true');
-      setAuthed(true);
-    } else {
+    if (pin !== OPERATOR_PIN) {
       setError('Incorrect PIN. Try again.');
       setPin('');
+      return;
     }
-  };
 
-  // Figure out which captains are missing (haven't submitted against ALL opponents)
-  const missingCaptains = (!ready || !todayCategory)
-    ? []
-    : CAPTAINS.filter((captain) => {
-        const captainData = captainSelections[captain.id];
-        if (!captainData) return true;
-        const categoryData = captainData[todayCategory];
-        if (!categoryData) return true;
-        const opponents = CAPTAINS.filter((c) => c.id !== captain.id);
-        return !opponents.every((opp) => {
-          const players = categoryData[opp.id];
-          return players && players.length > 0;
-        });
-      });
+    // For operator PIN, verify fresh data from server
+    setChecking(true);
+    setError('');
+    try {
+      const freshSelections = await fetchCaptainSelections();
+      if (checkAllSubmitted(freshSelections)) {
+        sessionStorage.setItem(SESSION_KEY, 'true');
+        setAuthed(true);
+      } else {
+        setError('Not all captains have submitted players. Use override PIN (0000) to bypass.');
+        setPin('');
+      }
+    } catch {
+      // If fetch fails, just allow access
+      sessionStorage.setItem(SESSION_KEY, 'true');
+      setAuthed(true);
+    }
+    setChecking(false);
+  };
 
   return (
     <div
@@ -103,13 +113,7 @@ export default function PinGate({ children }: { children: React.ReactNode }) {
           Enter the PIN to control matches
         </p>
 
-        {!ready && (
-          <div className="p-3 rounded-lg border text-center" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface)' }}>
-            <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>⏳ Loading captain data...</p>
-          </div>
-        )}
-
-        {ready && !allCaptainsSubmitted && missingCaptains.length > 0 && (
+        {!allCaptainsSubmitted && missingCaptains.length > 0 && (
           <div className="p-3 rounded-lg border-2 text-left" style={{ borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.1)' }}>
             <p className="text-xs font-semibold mb-1" style={{ color: '#f59e0b' }}>⚠ Waiting for captain submissions:</p>
             {missingCaptains.map((c) => (
@@ -145,10 +149,11 @@ export default function PinGate({ children }: { children: React.ReactNode }) {
 
         <button
           type="submit"
-          className="w-full py-3 rounded-lg text-white font-semibold transition-transform hover:scale-105 active:scale-95"
+          disabled={checking}
+          className="w-full py-3 rounded-lg text-white font-semibold transition-transform hover:scale-105 active:scale-95 disabled:opacity-60"
           style={{ backgroundColor: 'var(--color-primary)' }}
         >
-          Unlock
+          {checking ? 'Verifying...' : 'Unlock'}
         </button>
       </form>
     </div>

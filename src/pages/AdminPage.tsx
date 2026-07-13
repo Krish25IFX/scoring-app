@@ -119,7 +119,7 @@ export default function AdminPage() {
                                 vs {opponent?.teamName ?? opponentId}
                               </p>
                               <div className="flex flex-wrap gap-1">
-                                {players.map((player) => (
+                                {Array.isArray(players) && players.map((player) => (
                                   <span key={player} className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: 'var(--color-primary)', color: '#fff' }}>
                                     {player}
                                   </span>
@@ -144,7 +144,7 @@ export default function AdminPage() {
             <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>No matches played yet.</p>
           ) : (
             <div className="space-y-3">
-              {matchHistory.map((m) => (
+              {matchHistory.filter((m) => m && m.teams && m.gamesWon && m.config).map((m) => (
                 <div key={m.id} className="p-3 rounded-xl border" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface)' }}>
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-xs font-semibold uppercase" style={{ color: 'var(--color-text-muted)' }}>
