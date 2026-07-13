@@ -30,7 +30,7 @@ export const CAPTAINS: Captain[] = [
     id: 'captain3',
     name: 'Naman Sharma',
     teamName: 'The feather ninjas',
-    password: 'naman123',
+    password: 'Feather@Ninjas1',
     players: ['Naman Sharma', 'Darshil Shah', 'Sudhanshu Billore', 'Sandip Rathore', 'Shaashank Chudasama', 'HritikaF', 'Akash Sharma', 'Pulkit Gupta', 'Pagdhal IshaF', 'Joy Gajjar', 'Harsh Arora', 'Nikhil Goyal'],
   },
   {
@@ -44,7 +44,7 @@ export const CAPTAINS: Captain[] = [
     id: 'captain5',
     name: 'Praveen Pochina',
     teamName: 'Flick and Smash',
-    password: 'praveen123',
+    password: 'B85TN',
     players: ['Praveen Pochina', 'Tanjil Ghanchi', 'Aryan Gauravkumar', 'Prerak Dalia', 'Dhruti DesaiF', 'Sakshi GoyalF', 'harsh Pandya', 'Prabhash sharma' , 'Rajit Joshi' , 'Varmora Jigar' , 'Kaushal Dhora', 'Panchal Ajitkumar'],
   },
   {
