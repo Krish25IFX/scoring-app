@@ -44,8 +44,9 @@ export default function CaptainLoginPage() {
     refreshCaptainSelections();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const todaySchedule = getTodaySchedule();
-  // Deadline check: lock submissions after 2PM on game day
+  // Deadline check: lock submissions only for today's scheduled category
   const deadlinePassed = todaySchedule ? isDeadlinePassed() : false;
+  const lockedCategory = deadlinePassed && todaySchedule ? todaySchedule.category : null;
 
   const [password, setPassword] = useState('');
   const [selectedCaptainId, setSelectedCaptainId] = useState<string | null>(() => {
@@ -228,9 +229,9 @@ export default function CaptainLoginPage() {
         {/* Step 1: Login */}
         {step === 'login' && (
           <div className="space-y-4">
-            {deadlinePassed && (
+            {lockedCategory && (
               <div className="p-3 rounded-lg text-center font-medium" style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444' }}>
-                ⚠️ Deadline passed! Submissions are locked after {CAPTAIN_DEADLINE_HOUR > 12 ? `${CAPTAIN_DEADLINE_HOUR - 12}:00 PM` : `${CAPTAIN_DEADLINE_HOUR}:00 AM`} on game day.
+                ⚠️ Submissions for today's category ({CATEGORIES.find(c => c.id === lockedCategory)?.label}) are locked after {CAPTAIN_DEADLINE_HOUR > 12 ? `${CAPTAIN_DEADLINE_HOUR - 12}:00 PM` : `${CAPTAIN_DEADLINE_HOUR}:00 AM`}. Other categories remain open.
               </div>
             )}
             {todaySchedule && (
@@ -260,11 +261,10 @@ export default function CaptainLoginPage() {
               )}
               <button
                 type="submit"
-                disabled={deadlinePassed}
-                className="w-full py-3 rounded-lg text-white font-bold transition-transform hover:scale-105 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
+                className="w-full py-3 rounded-lg text-white font-bold transition-transform hover:scale-105 active:scale-95"
                 style={{ backgroundColor: 'var(--color-secondary)' }}
               >
-                {deadlinePassed ? 'Submissions Locked' : 'Login'}
+                Login
               </button>
             </form>
           </div>
@@ -291,8 +291,8 @@ export default function CaptainLoginPage() {
                 style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
               >
                 {CATEGORIES.map((cat) => (
-                  <option key={cat.id} value={cat.id}>
-                    {cat.label} ({cat.mode === 'singles' ? '1 player' : '2 players'})
+                  <option key={cat.id} value={cat.id} disabled={cat.id === lockedCategory}>
+                    {cat.label} ({cat.mode === 'singles' ? '1 player' : '2 players'}){cat.id === lockedCategory ? ' 🔒' : ''}
                   </option>
                 ))}
               </select>
@@ -360,13 +360,19 @@ export default function CaptainLoginPage() {
               </div>
             )}
 
+            {selectedCategory === lockedCategory && (
+              <div className="p-3 rounded-lg text-center font-medium" style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444' }}>
+                🔒 This category is locked. Select a different category above.
+              </div>
+            )}
+
             <button
               onClick={handleSubmitAll}
-              disabled={completedCount === 0}
+              disabled={completedCount === 0 || selectedCategory === lockedCategory}
               className="w-full py-3 rounded-lg text-white font-bold transition-transform hover:scale-105 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
               style={{ backgroundColor: 'var(--color-secondary)' }}
             >
-              ✓ Submit All Selections ({completedCount}/{opponentTeams.length})
+              {selectedCategory === lockedCategory ? '🔒 Category Locked' : `✓ Submit All Selections (${completedCount}/${opponentTeams.length})`}
             </button>
           </div>
         )}

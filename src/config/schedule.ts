@@ -29,8 +29,8 @@ export const CATEGORY_GROUP_MAP: Record<Category, CategoryGroup> = {
 export const MAX_GAMES_PER_PLAYER_PER_OPPONENT = 2;
 export const MAX_GAMES_PER_PLAYER_FINAL = 2;
 
-/** Captain selection deadline: 3:00 PM (15:00) on game day */
-export const CAPTAIN_DEADLINE_HOUR = 15; // 24-hour format
+/** Captain selection deadline: 4:00 PM (16:00) on game day */
+export const CAPTAIN_DEADLINE_HOUR = 16; // 24-hour format
 
 export const TOURNAMENT_SCHEDULE: ScheduleDay[] = [
   { date: '2026-07-13', label: '13th July', category: 'mens_double_1', categoryGroup: 'mens_double', timing: '6:00 PM – 8:00 PM', isFinal: false },
