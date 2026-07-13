@@ -63,7 +63,7 @@ export const TEAM_NAMES: string[] = CAPTAINS.map((c) => c.teamName);
  * PIN required to access the operator/setup pages.
  * Change this value to update the access PIN.
  */
-export const OPERATOR_PIN = '2508';
+export const OPERATOR_PIN = '9999';
 
 /**
  * Walkover score: points given to the team when the opponent cannot play.
