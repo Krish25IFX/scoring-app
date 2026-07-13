@@ -23,15 +23,19 @@ export default function PinGate({ children }: { children: React.ReactNode }) {
   const todaySchedule = getTodaySchedule();
   const todayCategory = todaySchedule?.category;
 
-  // Check if all captains have submitted players for today's category
+  // Check if all captains have submitted players for today's category (against ALL opponents)
   const allCaptainsSubmitted = todayCategory
     ? CAPTAINS.every((captain) => {
         const captainData = captainSelections[captain.id];
         if (!captainData) return false;
         const categoryData = captainData[todayCategory];
         if (!categoryData) return false;
-        // Must have at least one opponent with players selected
-        return Object.values(categoryData).some((players) => players.length > 0);
+        // Must have selections against ALL other captains
+        const opponents = CAPTAINS.filter((c) => c.id !== captain.id);
+        return opponents.every((opp) => {
+          const players = categoryData[opp.id];
+          return players && players.length > 0;
+        });
       })
     : true; // No match today — allow access
 
@@ -59,14 +63,18 @@ export default function PinGate({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Figure out which captains are missing
+  // Figure out which captains are missing (haven't submitted against ALL opponents)
   const missingCaptains = todayCategory
     ? CAPTAINS.filter((captain) => {
         const captainData = captainSelections[captain.id];
         if (!captainData) return true;
         const categoryData = captainData[todayCategory];
         if (!categoryData) return true;
-        return !Object.values(categoryData).some((players) => players.length > 0);
+        const opponents = CAPTAINS.filter((c) => c.id !== captain.id);
+        return !opponents.every((opp) => {
+          const players = categoryData[opp.id];
+          return players && players.length > 0;
+        });
       })
     : [];
 

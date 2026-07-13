@@ -308,35 +308,44 @@ export default function CaptainLoginPage() {
                 const selected = selections[opponent.id] ?? [];
                 const isDone = selected.length === maxPlayersPerOpponent;
                 return (
-                  <button
+                  <div
                     key={opponent.id}
                     onClick={() => { setActiveOpponentId(opponent.id); setError(''); }}
-                    className="w-full flex items-center justify-between p-4 rounded-lg border-2 text-left transition-all hover:scale-[1.01]"
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { setActiveOpponentId(opponent.id); setError(''); } }}
+                    className="w-full flex items-center justify-between p-4 rounded-lg text-left cursor-pointer"
                     style={{
-                      borderColor: isDone ? '#22c55e' : 'var(--color-border)',
-                      backgroundColor: isDone ? 'rgba(34, 197, 94, 0.1)' : 'var(--color-surface)',
+                      border: isDone ? '3px solid #22c55e' : '2px solid var(--color-border)',
+                      backgroundColor: isDone ? '#dcfce7' : 'var(--color-surface)',
                     }}
                   >
-                    <div>
-                      <span className="font-bold" style={{ color: isDone ? '#16a34a' : 'var(--color-text)' }}>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{ fontWeight: 700, fontSize: '0.95rem', color: isDone ? '#15803d' : 'var(--color-text)' }}>
                         vs {opponent.teamName}
-                      </span>
-                      <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
+                      </div>
+                      <div style={{ fontSize: '0.75rem', marginTop: '2px', color: 'var(--color-text-muted)' }}>
                         Captain: {opponent.name}
-                      </p>
+                      </div>
                       {isDone && (
-                        <p className="text-xs mt-0.5 font-medium" style={{ color: '#16a34a' }}>
+                        <div style={{ fontSize: '0.75rem', marginTop: '3px', fontWeight: 600, color: '#15803d' }}>
                           {selected.join(', ')}
-                        </p>
+                        </div>
                       )}
                     </div>
-                    <span className="text-sm font-bold px-2 py-1 rounded-md" style={{
+                    <div style={{
+                      fontSize: '0.8rem',
+                      fontWeight: 700,
+                      padding: '4px 10px',
+                      borderRadius: '6px',
                       color: isDone ? '#fff' : 'var(--color-text-muted)',
                       backgroundColor: isDone ? '#22c55e' : 'transparent',
+                      border: isDone ? 'none' : '1px solid var(--color-border)',
+                      flexShrink: 0,
                     }}>
-                      {isDone ? `✓` : 'Select'}
-                    </span>
-                  </button>
+                      {isDone ? '✓ Done' : 'Select'}
+                    </div>
+                  </div>
                 );
               })}
             </div>
