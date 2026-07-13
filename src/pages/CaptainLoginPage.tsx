@@ -42,7 +42,7 @@ export default function CaptainLoginPage() {
   useEffect(() => {
     refreshMatchHistory();
     refreshCaptainSelections();
-  }, [refreshMatchHistory, refreshCaptainSelections]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const todaySchedule = getTodaySchedule();
   // Deadline check: lock submissions after 2PM on game day
   const deadlinePassed = todaySchedule ? isDeadlinePassed() : false;
@@ -86,6 +86,10 @@ export default function CaptainLoginPage() {
 
   const currentCaptain = CAPTAINS.find((c) => c.id === selectedCaptainId);
   const opponentTeams = CAPTAINS.filter((c) => c.id !== selectedCaptainId);
+
+  // Use server selections if available (overrides stale localStorage draft)
+  const serverSelections = selectedCaptainId ? captainSelections[selectedCaptainId]?.[selectedCategory] : undefined;
+  const effectiveSelections = (serverSelections && Object.keys(serverSelections).length > 0) ? serverSelections : selections;
 
   // Determine mode from selected category
   const categoryMode: PlayMode = CATEGORIES.find((c) => c.id === selectedCategory)?.mode ?? 'doubles';
@@ -202,7 +206,7 @@ export default function CaptainLoginPage() {
     navigate('/');
   };
 
-  const completedCount = opponentTeams.filter((t) => selections[t.id] && selections[t.id].length === maxPlayersPerOpponent).length;
+  const completedCount = opponentTeams.filter((t) => effectiveSelections[t.id] && effectiveSelections[t.id].length === maxPlayersPerOpponent).length;
 
   return (
     <div className="min-h-screen p-4 md:p-8" style={{ backgroundColor: 'var(--color-bg)' }}>
@@ -305,7 +309,7 @@ export default function CaptainLoginPage() {
 
             <div className="space-y-2">
               {opponentTeams.map((opponent) => {
-                const selected = selections[opponent.id] ?? [];
+                const selected = effectiveSelections[opponent.id] ?? [];
                 const isDone = selected.length === maxPlayersPerOpponent;
                 return (
                   <div
@@ -372,7 +376,7 @@ export default function CaptainLoginPage() {
           <div className="space-y-4">
             {(() => {
               const opponent = CAPTAINS.find((c) => c.id === activeOpponentId)!;
-              const selected = selections[activeOpponentId] ?? [];
+              const selected = effectiveSelections[activeOpponentId] ?? [];
               return (
                 <>
                   <div className="p-3 rounded-lg" style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
