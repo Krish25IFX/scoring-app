@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useMatch } from '../context/MatchContext';
 import { CAPTAINS } from '../config/players';
 import { CATEGORIES } from '../types';
+import { exportCaptainSelectionsPDF } from '../export';
 
 const ADMIN_PIN = '0112';
 const SESSION_KEY = 'admin_auth';
@@ -82,7 +83,18 @@ export default function AdminPage() {
 
         {/* Captain Selections */}
         <section className="mb-8">
-          <h2 className="text-xl font-bold mb-4" style={{ color: 'var(--color-text)' }}>Captain Selections</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-bold" style={{ color: 'var(--color-text)' }}>Captain Selections</h2>
+            {Object.keys(captainSelections).length > 0 && (
+              <button
+                onClick={() => exportCaptainSelectionsPDF(captainSelections, CAPTAINS, categoryMap)}
+                className="px-4 py-2 rounded-xl text-sm font-semibold text-white transition-transform hover:scale-105"
+                style={{ backgroundColor: 'var(--color-primary)' }}
+              >
+                📄 Export PDF
+              </button>
+            )}
+          </div>
           {Object.keys(captainSelections).length === 0 ? (
             <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>No captain selections yet.</p>
           ) : (

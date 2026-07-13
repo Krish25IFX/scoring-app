@@ -1,5 +1,7 @@
 import { jsPDF } from 'jspdf';
 import type { MatchState } from './types';
+import type { Captain } from './config/players';
+import type { CaptainSelectionsMap } from './api';
 
 function downloadFile(content: string, filename: string, mimeType: string) {
   const blob = new Blob([content], { type: mimeType });
@@ -85,4 +87,83 @@ export function exportMatchPDF(match: MatchState) {
   }
 
   doc.save(`match-${match.id}.pdf`);
+}
+
+export function exportCaptainSelectionsPDF(
+  captainSelections: CaptainSelectionsMap,
+  captains: Captain[],
+  categoryLabels: Record<string, string>
+) {
+  const doc = new jsPDF();
+  const margin = 15;
+  const pageHeight = doc.internal.pageSize.getHeight();
+  let y = margin;
+
+  const captainMap = Object.fromEntries(captains.map((c) => [c.id, c]));
+
+  doc.setFontSize(16);
+  doc.text('Captain Player Selections', margin, y);
+  y += 10;
+
+  doc.setFontSize(9);
+  doc.text(`Generated: ${new Date().toLocaleString()}`, margin, y);
+  y += 12;
+
+  for (const [captainId, categories] of Object.entries(captainSelections)) {
+    const captain = captainMap[captainId];
+    if (!captain) continue;
+
+    // Check page space
+    if (y > pageHeight - 40) {
+      doc.addPage();
+      y = margin;
+    }
+
+    doc.setFontSize(13);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`${captain.name} — ${captain.teamName}`, margin, y);
+    y += 8;
+
+    for (const [category, opponents] of Object.entries(categories)) {
+      if (y > pageHeight - 30) {
+        doc.addPage();
+        y = margin;
+      }
+
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`${categoryLabels[category] ?? category}`, margin + 4, y);
+      y += 6;
+
+      for (const [opponentId, players] of Object.entries(opponents)) {
+        if (y > pageHeight - 20) {
+          doc.addPage();
+          y = margin;
+        }
+
+        const opponent = captainMap[opponentId];
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'italic');
+        doc.text(`vs ${opponent?.teamName ?? opponentId}:`, margin + 8, y);
+        y += 5;
+
+        doc.setFont('helvetica', 'normal');
+        const playerText = players.join(', ');
+        const lines = doc.splitTextToSize(playerText, 170);
+        for (const line of lines) {
+          if (y > pageHeight - 15) {
+            doc.addPage();
+            y = margin;
+          }
+          doc.text(line, margin + 12, y);
+          y += 5;
+        }
+        y += 2;
+      }
+      y += 3;
+    }
+    y += 6;
+  }
+
+  doc.save(`captain-selections-${new Date().toISOString().slice(0, 10)}.pdf`);
 }
