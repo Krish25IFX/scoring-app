@@ -36,14 +36,12 @@ function getEligiblePlayersByGender(players: string[], category: Category): stri
 
 export default function CaptainLoginPage() {
   const navigate = useNavigate();
-  const { setCaptainSelection, captainSelections, canPlayerPlay, refreshMatchHistory, refreshCaptainSelections } = useMatch();
-
-  const [dataLoaded, setDataLoaded] = useState(false);
+  const { setCaptainSelection, captainSelections, canPlayerPlay, refreshMatchHistory, refreshCaptainSelections, ready } = useMatch();
 
   // Refresh match history + captain selections from server on every mount
   useEffect(() => {
     refreshMatchHistory();
-    refreshCaptainSelections().then(() => setDataLoaded(true)).catch(() => setDataLoaded(true));
+    refreshCaptainSelections();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const todaySchedule = getTodaySchedule();
   // Deadline check: lock submissions only for today's scheduled category
@@ -133,17 +131,7 @@ export default function CaptainLoginPage() {
     if (existing && Object.keys(existing).length > 0) {
       setSelections(existing);
     } else {
-      // If server data not available yet, try re-fetching
-      if (!dataLoaded) {
-        refreshCaptainSelections().then(() => {
-          const fresh = captainSelections[captain.id]?.[selectedCategory];
-          if (fresh && Object.keys(fresh).length > 0) {
-            setSelections(fresh);
-          }
-        });
-      } else {
-        setSelections({});
-      }
+      setSelections({});
     }
     setStep('selectPlayers');
     setError('');
@@ -285,11 +273,12 @@ export default function CaptainLoginPage() {
         {/* Step 2: Select Players Per Opponent Team */}
         {step === 'selectPlayers' && currentCaptain && !activeOpponentId && (
           <div className="space-y-4">
-            {!dataLoaded && (
-              <div className="p-3 rounded-lg text-center" style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
-                <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Loading selections from server...</p>
+            {!ready ? (
+              <div className="p-4 rounded-lg text-center" style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+                <p className="text-sm font-medium" style={{ color: 'var(--color-text-muted)' }}>⏳ Loading your selections...</p>
               </div>
-            )}
+            ) : (
+            <>
             {/* Category Selector */}
             <div className="p-3 rounded-lg border" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface)' }}>
               <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>
@@ -328,17 +317,20 @@ export default function CaptainLoginPage() {
               {opponentTeams.map((opponent) => {
                 const selected = effectiveSelections[opponent.id] ?? [];
                 const isDone = selected.length === maxPlayersPerOpponent;
+                const isLocked = selectedCategory === lockedCategory;
                 return (
                   <div
                     key={opponent.id}
-                    onClick={() => { setActiveOpponentId(opponent.id); setError(''); }}
+                    onClick={() => { if (!isLocked) { setActiveOpponentId(opponent.id); setError(''); } }}
                     role="button"
                     tabIndex={0}
-                    onKeyDown={(e) => { if (e.key === 'Enter') { setActiveOpponentId(opponent.id); setError(''); } }}
-                    className="w-full flex items-center justify-between p-4 rounded-lg text-left cursor-pointer"
+                    onKeyDown={(e) => { if (e.key === 'Enter' && !isLocked) { setActiveOpponentId(opponent.id); setError(''); } }}
+                    className="w-full flex items-center justify-between p-4 rounded-lg text-left"
                     style={{
                       border: isDone ? '3px solid #22c55e' : '2px solid var(--color-border)',
                       backgroundColor: isDone ? '#dcfce7' : 'var(--color-surface)',
+                      cursor: isLocked ? 'not-allowed' : 'pointer',
+                      opacity: isLocked && !isDone ? 0.6 : 1,
                     }}
                   >
                     <div style={{ minWidth: 0, flex: 1 }}>
@@ -391,11 +383,13 @@ export default function CaptainLoginPage() {
             >
               {selectedCategory === lockedCategory ? '🔒 Category Locked' : `✓ Submit All Selections (${completedCount}/${opponentTeams.length})`}
             </button>
+            </>
+            )}
           </div>
         )}
 
         {/* Step 2b: Player selection for a specific opponent */}
-        {step === 'selectPlayers' && currentCaptain && activeOpponentId && (
+        {step === 'selectPlayers' && currentCaptain && activeOpponentId && selectedCategory !== lockedCategory && (
           <div className="space-y-4">
             {(() => {
               const opponent = CAPTAINS.find((c) => c.id === activeOpponentId)!;
