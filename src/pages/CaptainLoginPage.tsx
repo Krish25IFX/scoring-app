@@ -272,7 +272,7 @@ export default function CaptainLoginPage() {
             {/* Category Selector */}
             <div className="p-3 rounded-lg border" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface)' }}>
               <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>
-                Category for today
+                Category
               </label>
               <select
                 value={selectedCategory}

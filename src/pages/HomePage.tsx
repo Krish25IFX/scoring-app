@@ -107,6 +107,14 @@ export default function HomePage() {
           >
             🏆 Tournament Standings
           </Link>
+
+          <Link
+            to="/admin"
+            className="flex items-center justify-center gap-2 w-full py-3.5 px-6 rounded-2xl text-lg font-semibold border-2 transition-transform hover:scale-105"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-muted)' }}
+          >
+            🛡️ Admin Panel
+          </Link>
         </div>
 
         {/* Theme toggle */}

@@ -23,7 +23,7 @@ export const CAPTAINS: Captain[] = [
     id: 'captain2',
     name: 'Abhishek Chhajer',
     teamName: 'RACKET ROMEO',
-    password: 'abhishek123',
+    password: 'helloindia',
     players: ['Suvam Panda', 'Kotikalapudi Jayasurya', 'Anishkumar Anilkumar Nair', 'Shivani ThakurF', 'Gideon Sahoo', 'Devansh Alkeshbhai Shah', 'Dhanush Darshan S A', 'Harshit Joshi', 'Aarav Kansara', 'Prem Bhoot' , 'Siddhi ShahF', 'Chirag Kajar' , 'Abhishek Chhajer'],
   },
   {

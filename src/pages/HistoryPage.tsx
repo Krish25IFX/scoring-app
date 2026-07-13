@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { getAllMatches, deleteMatch, getFullMatch } from '../persistence';
 import { fetchAllMatches, deleteMatchApi } from '../api';
 import { exportMatchJSON, exportMatchCSV, exportMatchPDF } from '../export';
+import { OPERATOR_PIN } from '../config/players';
 import type { MatchSummary, MatchState, TeamId } from '../types';
 
 function formatDuration(ms: number | null) {
@@ -17,6 +18,9 @@ function formatDuration(ms: number | null) {
 export default function HistoryPage() {
   const [matches, setMatches] = useState<MatchSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [pin, setPin] = useState('');
+  const [pinError, setPinError] = useState(false);
 
   useEffect(() => {
     // Try server first, fall back to local IndexedDB
@@ -48,10 +52,25 @@ export default function HistoryPage() {
   }, []);
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Delete this match permanently?')) return;
-    await deleteMatch(id);
-    await deleteMatchApi(id).catch(() => {});
-    setMatches((prev) => prev.filter((m) => m.id !== id));
+    setDeleteTarget(id);
+    setPin('');
+    setPinError(false);
+  };
+
+  const confirmDelete = async () => {
+    if (pin !== OPERATOR_PIN) {
+      setPinError(true);
+      setPin('');
+      return;
+    }
+    if (deleteTarget) {
+      await deleteMatch(deleteTarget);
+      await deleteMatchApi(deleteTarget).catch(() => {});
+      setMatches((prev) => prev.filter((m) => m.id !== deleteTarget));
+    }
+    setDeleteTarget(null);
+    setPin('');
+    setPinError(false);
   };
 
   const handleExportJSON = async (id: string) => {
@@ -195,6 +214,55 @@ export default function HistoryPage() {
           </div>
         )}
       </div>
+
+      {/* Delete confirmation modal */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-xs rounded-2xl p-6 space-y-4 text-center" style={{ backgroundColor: 'var(--color-surface)' }}>
+            <div className="text-4xl">🔒</div>
+            <h3 className="text-lg font-bold" style={{ color: 'var(--color-text)' }}>
+              Enter Operator PIN
+            </h3>
+            <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
+              Operator PIN is required to delete a match
+            </p>
+            <input
+              type="password"
+              inputMode="numeric"
+              value={pin}
+              onChange={(e) => { setPin(e.target.value); setPinError(false); }}
+              placeholder="••••"
+              maxLength={8}
+              autoFocus
+              className="w-full p-3 rounded-lg border-2 text-center text-xl tracking-widest"
+              style={{
+                borderColor: pinError ? '#ef4444' : 'var(--color-border)',
+                backgroundColor: 'var(--color-bg)',
+                color: 'var(--color-text)',
+              }}
+              onKeyDown={(e) => { if (e.key === 'Enter') confirmDelete(); }}
+            />
+            {pinError && (
+              <p className="text-sm text-red-500 font-medium">Incorrect PIN</p>
+            )}
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setDeleteTarget(null); setPin(''); setPinError(false); }}
+                className="flex-1 py-2.5 rounded-xl border font-semibold text-sm"
+                style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-muted)' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDelete}
+                className="flex-1 py-2.5 rounded-xl font-semibold text-sm text-white bg-red-500 hover:bg-red-600 transition-colors"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
