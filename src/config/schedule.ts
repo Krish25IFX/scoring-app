@@ -30,7 +30,7 @@ export const MAX_GAMES_PER_PLAYER_PER_OPPONENT = 2;
 export const MAX_GAMES_PER_PLAYER_FINAL = 2;
 
 /** Captain selection deadline: 4:00 PM (16:00) on game day */
-export const CAPTAIN_DEADLINE_HOUR = 14; // 24-hour format
+export const CAPTAIN_DEADLINE_HOUR = 17; // 24-hour format
 
 export const TOURNAMENT_SCHEDULE: ScheduleDay[] = [
   { date: '2026-07-13', label: '13th July', category: 'mens_double_1', categoryGroup: 'mens_double', timing: '6:00 PM – 8:00 PM', isFinal: false },
