@@ -12,8 +12,8 @@ const db = new Database(dbPath);
 db.pragma('journal_mode = WAL');
 
 db.exec(`
-  CREATE TABLE IF NOT EXISTS active_match (
-    id INTEGER PRIMARY KEY CHECK (id = 1),
+  CREATE TABLE IF NOT EXISTS active_matches (
+    match_id TEXT PRIMARY KEY,
     state TEXT NOT NULL,
     updated_at INTEGER NOT NULL
   );
@@ -32,13 +32,17 @@ db.exec(`
   );
 `);
 
+// Migrate: if old single-row active_match table exists, drop it
+try { db.exec('DROP TABLE IF EXISTS active_match'); } catch { /* ignore */ }
+
 // Prepared statements
-const getActiveMatch = db.prepare('SELECT state FROM active_match WHERE id = 1');
+const getAllActiveMatches = db.prepare('SELECT match_id, state FROM active_matches ORDER BY updated_at DESC');
+const getActiveMatchById = db.prepare('SELECT state FROM active_matches WHERE match_id = ?');
 const upsertActiveMatch = db.prepare(`
-  INSERT INTO active_match (id, state, updated_at) VALUES (1, ?, ?)
-  ON CONFLICT(id) DO UPDATE SET state = excluded.state, updated_at = excluded.updated_at
+  INSERT INTO active_matches (match_id, state, updated_at) VALUES (?, ?, ?)
+  ON CONFLICT(match_id) DO UPDATE SET state = excluded.state, updated_at = excluded.updated_at
 `);
-const deleteActiveMatch = db.prepare('DELETE FROM active_match WHERE id = 1');
+const deleteActiveMatchById = db.prepare('DELETE FROM active_matches WHERE match_id = ?');
 
 const insertMatch = db.prepare('INSERT OR REPLACE INTO matches (id, state, created_at, ended_at) VALUES (?, ?, ?, ?)');
 const getAllMatches = db.prepare('SELECT state FROM matches ORDER BY created_at DESC');
@@ -57,34 +61,58 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '5mb' }));
 
-// ─── Active Match (live scoring) ───
+// ─── Active Matches (live scoring — supports multiple simultaneous) ───
 
-// GET current active match (polled by spectators)
+// GET all active matches (spectators see a list)
+app.get('/api/active-matches', (req, res) => {
+  const rows = getAllActiveMatches.all();
+  const matches = rows.map((r) => JSON.parse(r.state));
+  res.json({ matches });
+});
+
+// GET single active match by ID (backward compat + spectator detail)
 app.get('/api/active-match', (req, res) => {
-  const row = getActiveMatch.get();
-  if (!row) {
-    return res.json({ match: null });
-  }
+  // Return all active matches for backward compatibility
+  const rows = getAllActiveMatches.all();
+  const matches = rows.map((r) => JSON.parse(r.state));
+  // Return first match for old clients, all for new
+  res.json({ match: matches[0] ?? null, matches });
+});
+
+app.get('/api/active-match/:matchId', (req, res) => {
+  const row = getActiveMatchById.get(req.params.matchId);
+  if (!row) return res.json({ match: null });
   res.json({ match: JSON.parse(row.state) });
 });
 
-// POST update active match (called by operator on every point)
+// POST update an active match (called by operator on every point)
 app.post('/api/active-match', (req, res) => {
   const { match } = req.body;
-  if (!match) {
-    return res.status(400).json({ error: 'match is required' });
+  if (!match || !match.id) {
+    return res.status(400).json({ error: 'match with id is required' });
   }
-  upsertActiveMatch.run(JSON.stringify(match), Date.now());
+  upsertActiveMatch.run(match.id, JSON.stringify(match), Date.now());
 
   // Also save to matches history
   insertMatch.run(match.id, JSON.stringify(match), match.startedAt, match.endedAt || null);
 
+  // If match is completed, remove from active
+  if (match.matchWinner) {
+    deleteActiveMatchById.run(match.id);
+  }
+
   res.json({ ok: true });
 });
 
-// DELETE clear active match
+// DELETE a specific active match
+app.delete('/api/active-match/:matchId', (req, res) => {
+  deleteActiveMatchById.run(req.params.matchId);
+  res.json({ ok: true });
+});
+
+// DELETE all active matches (legacy)
 app.delete('/api/active-match', (req, res) => {
-  deleteActiveMatch.run();
+  db.prepare('DELETE FROM active_matches').run();
   res.json({ ok: true });
 });
 

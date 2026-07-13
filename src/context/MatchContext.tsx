@@ -11,6 +11,7 @@ import {
 } from '../engine';
 import { saveMatch } from '../persistence';
 import { postActiveMatch, deleteActiveMatch, fetchCaptainSelections, postCaptainSelection, fetchActiveMatch, fetchAllMatches } from '../api';
+import type { CaptainSelectionsMap } from '../api';
 
 interface MatchContextType {
   match: MatchState | null;
@@ -18,13 +19,15 @@ interface MatchContextType {
   history: MatchState[];
   historyIndex: number;
   captains: CaptainInfo[];
-  captainSelections: Record<string, Record<string, string[]>>;
+  captainSelections: CaptainSelectionsMap;
   selectedCaptainAId: string | null;
   selectedCaptainBId: string | null;
-  setCaptainSelection: (captainId: string, selections: Record<string, string[]>) => void;
+  setCaptainSelection: (captainId: string, category: string, selections: Record<string, string[]>) => void;
   setOperatorSelectedCaptain: (team: TeamId, captainId: string) => void;
-  getPlayerUsage: (player: string, categoryGroup: CategoryGroup, opponentTeamName: string) => number;
-  canPlayerPlay: (player: string, category: Category, opponentTeamName: string, isFinal: boolean) => boolean;
+  /** Count how many times a player is selected in a category group against a specific opponent team (from selections) */
+  getPlayerSelectionUsage: (player: string, categoryGroup: CategoryGroup, captainId: string, opponentCaptainId: string) => number;
+  /** Check if a player can still be selected (hasn't exceeded max games vs this opponent in this category group) */
+  canPlayerPlay: (player: string, category: Category, captainId: string, opponentCaptainId: string, isFinal: boolean) => boolean;
   
   startMatch: (
     config: MatchConfig,
@@ -69,7 +72,7 @@ export function MatchProvider({ children }: { children: ReactNode }) {
     teamName: c.teamName,
     players: c.players,
   }));
-  const [captainSelections, setCaptainSelections] = useState<Record<string, Record<string, string[]>>>({});
+  const [captainSelections, setCaptainSelections] = useState<CaptainSelectionsMap>({});
   const [selectedCaptainAId, setSelectedCaptainAId] = useState<string | null>(() => {
     try { return localStorage.getItem('operator_captainA'); } catch { return null; }
   });
@@ -93,7 +96,7 @@ export function MatchProvider({ children }: { children: ReactNode }) {
         setHistory([activeMatch]);
         setHistoryIndex(0);
       }
-      setCaptainSelections(selections as Record<string, Record<string, string[]>>);
+      setCaptainSelections(selections as CaptainSelectionsMap);
       setMatchHistory(allMatches as MatchState[]);
       setReady(true);
     });
@@ -202,15 +205,28 @@ export function MatchProvider({ children }: { children: ReactNode }) {
   }, [match, pushState]);
 
   const resetMatch = useCallback(() => {
+    const currentMatchId = match?.id;
     setMatch(null);
     setHistory([]);
     setHistoryIndex(-1);
-    deleteActiveMatch().catch(console.error);
-  }, []);
+    if (currentMatchId) {
+      deleteActiveMatch(currentMatchId).catch(console.error);
+    }
+  }, [match?.id]);
 
-  const setCaptainSelection = useCallback((captainId: string, selections: Record<string, string[]>) => {
-    setCaptainSelections((prev) => ({ ...prev, [captainId]: selections }));
-    postCaptainSelection(captainId, selections).catch(console.error);
+  const setCaptainSelection = useCallback((captainId: string, category: string, selections: Record<string, string[]>) => {
+    setCaptainSelections((prev) => {
+      const updated = {
+        ...prev,
+        [captainId]: {
+          ...(prev[captainId] || {}),
+          [category]: selections,
+        },
+      };
+      // Send the full captain data to server
+      postCaptainSelection(captainId, updated[captainId]).catch(console.error);
+      return updated;
+    });
   }, []);
 
   const setOperatorSelectedCaptain = useCallback((team: TeamId, captainId: string) => {
@@ -223,36 +239,29 @@ export function MatchProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  /** Count how many times a player has played in a category group against a specific opponent team */
-  const getPlayerUsage = useCallback((player: string, categoryGroup: CategoryGroup, opponentTeamName: string): number => {
+  /** Count how many times a player is selected against a specific opponent in a category group (across all categories in that group) */
+  const getPlayerSelectionUsage = useCallback((player: string, categoryGroup: CategoryGroup, captainId: string, opponentCaptainId: string): number => {
+    const captainData = captainSelections[captainId];
+    if (!captainData) return 0;
     let count = 0;
-    for (const m of matchHistory) {
-      if (!m.matchWinner && !m.forfeit) continue; // only count completed matches
-      const mGroup = CATEGORY_GROUP_MAP[m.category];
-      if (mGroup !== categoryGroup) continue;
-
-      // Check if this match involves the opponent team
-      const isOpponentA = m.teamAName === opponentTeamName;
-      const isOpponentB = m.teamBName === opponentTeamName;
-      if (!isOpponentA && !isOpponentB) continue;
-
-      // Check if the player was in the match
-      const teamAPlayers = m.teams.A.players.map((p) => p.name);
-      const teamBPlayers = m.teams.B.players.map((p) => p.name);
-      if (teamAPlayers.includes(player) || teamBPlayers.includes(player)) {
+    for (const [cat, opponents] of Object.entries(captainData)) {
+      // Only count categories in the same group
+      if (CATEGORY_GROUP_MAP[cat as Category] !== categoryGroup) continue;
+      const players = opponents[opponentCaptainId];
+      if (players && players.includes(player)) {
         count++;
       }
     }
     return count;
-  }, [matchHistory]);
+  }, [captainSelections]);
 
-  /** Check if a player can still play (hasn't exceeded max games) */
-  const canPlayerPlay = useCallback((player: string, category: Category, opponentTeamName: string, isFinal: boolean): boolean => {
+  /** Check if a player can still be selected (hasn't exceeded max games vs this opponent in this category group) */
+  const canPlayerPlay = useCallback((player: string, category: Category, captainId: string, opponentCaptainId: string, isFinal: boolean): boolean => {
     const group = CATEGORY_GROUP_MAP[category];
-    const usage = getPlayerUsage(player, group, opponentTeamName);
+    const usage = getPlayerSelectionUsage(player, group, captainId, opponentCaptainId);
     const max = isFinal ? MAX_GAMES_PER_PLAYER_FINAL : MAX_GAMES_PER_PLAYER_PER_OPPONENT;
     return usage < max;
-  }, [getPlayerUsage]);
+  }, [getPlayerSelectionUsage]);
 
   /** Record a forfeit match */
   const recordForfeit = useCallback((
@@ -350,7 +359,7 @@ export function MatchProvider({ children }: { children: ReactNode }) {
         selectedCaptainBId,
         setCaptainSelection,
         setOperatorSelectedCaptain,
-        getPlayerUsage,
+        getPlayerSelectionUsage,
         canPlayerPlay,
         startMatch,
         point,

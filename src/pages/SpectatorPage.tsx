@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useMatchTimer } from '../hooks/useMatchTimer';
-import { fetchActiveMatch } from '../api';
+import { fetchActiveMatches, fetchActiveMatchById } from '../api';
 import type { MatchState, TeamId } from '../types';
 
 export default function SpectatorPage() {
+  const [activeMatches, setActiveMatches] = useState<MatchState[]>([]);
+  const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
   const [match, setMatch] = useState<MatchState | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -13,20 +15,32 @@ export default function SpectatorPage() {
 
     const poll = async () => {
       try {
-        const m = await fetchActiveMatch();
-        if (active) {
-          setMatch(m);
-          setLoading(false);
+        if (selectedMatchId) {
+          // Watching a specific match
+          const m = await fetchActiveMatchById(selectedMatchId);
+          if (active) { setMatch(m); setLoading(false); }
+        } else {
+          // Fetch all active matches for the list
+          const matches = await fetchActiveMatches();
+          if (active) {
+            setActiveMatches(matches);
+            // If only one match, auto-select it
+            if (matches.length === 1) {
+              setSelectedMatchId(matches[0].id);
+              setMatch(matches[0]);
+            }
+            setLoading(false);
+          }
         }
       } catch {
         // Server might be down, keep trying
       }
     };
 
-    poll(); // initial fetch
+    poll();
     const interval = setInterval(poll, 1500);
     return () => { active = false; clearInterval(interval); };
-  }, []);
+  }, [selectedMatchId]);
 
   const timer = useMatchTimer(
     match?.startedAt ?? Date.now(),
@@ -43,6 +57,41 @@ export default function SpectatorPage() {
   }
 
   if (!match) {
+    // Show list of active matches if any
+    if (activeMatches.length > 1) {
+      return (
+        <div className="min-h-screen p-4 md:p-8" style={{ backgroundColor: 'var(--color-bg)' }}>
+          <div className="max-w-lg mx-auto space-y-4">
+            <h1 className="text-2xl font-black text-center" style={{ color: 'var(--color-secondary)' }}>
+              🏸 Live Matches ({activeMatches.length})
+            </h1>
+            {activeMatches.map((m) => (
+              <button
+                key={m.id}
+                onClick={() => { setSelectedMatchId(m.id); setMatch(m); }}
+                className="w-full p-4 rounded-lg border-2 text-left transition-all hover:scale-[1.01]"
+                style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface)' }}
+              >
+                <div className="flex justify-between items-center">
+                  <div>
+                    <span className="font-bold" style={{ color: 'var(--color-score-a)' }}>{m.teams.A.name}</span>
+                    <span style={{ color: 'var(--color-text-muted)' }}> vs </span>
+                    <span className="font-bold" style={{ color: 'var(--color-score-b)' }}>{m.teams.B.name}</span>
+                  </div>
+                  <div className="text-lg font-black tabular-nums" style={{ color: 'var(--color-text)' }}>
+                    {m.games[m.currentGameIndex]?.scores.A ?? 0}–{m.games[m.currentGameIndex]?.scores.B ?? 0}
+                  </div>
+                </div>
+                <p className="text-xs mt-1" style={{ color: 'var(--color-text-muted)' }}>
+                  Game {m.currentGameIndex + 1} · {m.config.playMode} · {m.matchWinner ? 'FINISHED' : m.isPaused ? 'PAUSED' : 'LIVE'}
+                </p>
+              </button>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4" style={{ backgroundColor: 'var(--color-bg)' }}>
         <div className="text-6xl">🏸</div>
@@ -70,9 +119,20 @@ export default function SpectatorPage() {
         className="flex items-center justify-between px-4 py-2 border-b"
         style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface)' }}
       >
-        <span className="text-sm font-semibold uppercase tracking-widest" style={{ color: 'var(--color-text-muted)' }}>
-          🏸 Badminton · {match.config.playMode} · Best of {match.config.bestOf}
-        </span>
+        <div className="flex items-center gap-2">
+          {activeMatches.length > 1 && (
+            <button
+              onClick={() => { setSelectedMatchId(null); setMatch(null); }}
+              className="text-xs px-2 py-1 rounded border"
+              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-muted)' }}
+            >
+              ← All
+            </button>
+          )}
+          <span className="text-sm font-semibold uppercase tracking-widest" style={{ color: 'var(--color-text-muted)' }}>
+            🏸 {match.config.playMode} · Best of {match.config.bestOf}
+          </span>
+        </div>
         <div className="flex items-center gap-3">
           <span className="text-sm font-mono tabular-nums" style={{ color: 'var(--color-text-muted)' }}>⏱ {timer}</span>
           {match.isPaused && !isOver && (

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMatch } from '../context/MatchContext';
 import { CAPTAINS } from '../config/players';
-import {  getTodaySchedule, CAPTAIN_DEADLINE_HOUR, MAX_GAMES_PER_PLAYER_PER_OPPONENT } from '../config/schedule';
+import { isDeadlinePassed, getTodaySchedule, CAPTAIN_DEADLINE_HOUR, MAX_GAMES_PER_PLAYER_PER_OPPONENT } from '../config/schedule';
 import { CATEGORIES } from '../types';
 import type { Category, PlayMode } from '../types';
 
@@ -43,10 +43,9 @@ export default function CaptainLoginPage() {
     refreshMatchHistory();
     refreshCaptainSelections();
   }, [refreshMatchHistory, refreshCaptainSelections]);
-  // TODO: re-enable deadline check after testing
-  // const deadlinePassed = isDeadlinePassed();
-  const deadlinePassed = false;
   const todaySchedule = getTodaySchedule();
+  // Deadline check: lock submissions after 2PM on game day
+  const deadlinePassed = todaySchedule ? isDeadlinePassed() : false;
 
   const [password, setPassword] = useState('');
   const [selectedCaptainId, setSelectedCaptainId] = useState<string | null>(() => {
@@ -122,10 +121,12 @@ export default function CaptainLoginPage() {
       return;
     }
     setSelectedCaptainId(captain.id);
-    // Load existing selections if any
-    const existing = captainSelections[captain.id];
+    // Load existing selections for the current category
+    const existing = captainSelections[captain.id]?.[selectedCategory];
     if (existing && Object.keys(existing).length > 0) {
       setSelections(existing);
+    } else {
+      setSelections({});
     }
     setStep('selectPlayers');
     setError('');
@@ -196,7 +197,7 @@ export default function CaptainLoginPage() {
       }
     }
     if (!selectedCaptainId) return;
-    setCaptainSelection(selectedCaptainId, selections);
+    setCaptainSelection(selectedCaptainId, selectedCategory, selections);
     clearDraft();
     navigate('/');
   };
@@ -276,9 +277,11 @@ export default function CaptainLoginPage() {
               <select
                 value={selectedCategory}
                 onChange={(e) => {
-                  setSelectedCategory(e.target.value as Category);
-                  // Clear selections when category changes (mode might change)
-                  setSelections({});
+                  const newCat = e.target.value as Category;
+                  setSelectedCategory(newCat);
+                  // Load existing selections for this category, or clear
+                  const existing = selectedCaptainId ? captainSelections[selectedCaptainId]?.[newCat] : undefined;
+                  setSelections(existing && Object.keys(existing).length > 0 ? existing : {});
                 }}
                 className="w-full mt-1 p-2 rounded-lg border text-sm font-medium"
                 style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
@@ -372,7 +375,7 @@ export default function CaptainLoginPage() {
 
                   <div className="space-y-2 max-h-72 overflow-y-auto">
                     {getEligiblePlayersByGender(currentCaptain.players, selectedCategory).map((player) => {
-                      const eligibleHistory = canPlayerPlay(player, selectedCategory, opponent.teamName, isFinal);
+                      const eligibleHistory = selectedCaptainId ? canPlayerPlay(player, selectedCategory, selectedCaptainId, opponent.id, isFinal) : true;
                       const eligibleMix = canSelectForMix(player, activeOpponentId);
                       const eligible = eligibleHistory && eligibleMix;
                       const isSelected = selected.includes(player);

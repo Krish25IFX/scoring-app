@@ -46,23 +46,24 @@ export default function SetupPage() {
 
   const submittedCaptains = captains.filter((c) => {
     const sel = captainSelections[c.id];
-    return sel && Object.keys(sel).length > 0;
+    // Captain has submitted for the current category
+    return sel && sel[category] && Object.keys(sel[category]).length > 0;
   });
   const selectedCaptainA = captains.find((c) => c.id === selectedCaptainAId) ?? null;
   const selectedCaptainB = captains.find((c) => c.id === selectedCaptainBId) ?? null;
 
-  // Get players selected specifically for the opponent team (memoized)
+  // Get players selected specifically for the opponent team IN THIS CATEGORY
   const selectedCaptainAPlayers = useMemo(() => (
     (selectedCaptainAId && selectedCaptainBId)
-      ? (captainSelections[selectedCaptainAId]?.[selectedCaptainBId] ?? [])
+      ? (captainSelections[selectedCaptainAId]?.[category]?.[selectedCaptainBId] ?? [])
       : []
-  ), [selectedCaptainAId, selectedCaptainBId, captainSelections]);
+  ), [selectedCaptainAId, selectedCaptainBId, captainSelections, category]);
 
   const selectedCaptainBPlayers = useMemo(() => (
     (selectedCaptainBId && selectedCaptainAId)
-      ? (captainSelections[selectedCaptainBId]?.[selectedCaptainAId] ?? [])
+      ? (captainSelections[selectedCaptainBId]?.[category]?.[selectedCaptainAId] ?? [])
       : []
-  ), [selectedCaptainBId, selectedCaptainAId, captainSelections]);
+  ), [selectedCaptainBId, selectedCaptainAId, captainSelections, category]);
 
   // Derive effective players directly from captain selections (no operator override needed if exact count)
   const maxPlayers = playMode === 'singles' ? 1 : 2;
@@ -297,7 +298,7 @@ export default function SetupPage() {
                         style={{ backgroundColor: 'var(--color-bg)' }}
                       >
                         <span className="text-sm font-bold" style={{ color: 'var(--color-score-a)' }}>✓</span>
-                        <span className="text-sm font-medium">{player}</span>
+                        <span className="text-sm font-medium">{player.replace(/F$/, '')}</span>
                       </div>
                     ))}
                   </div>
@@ -308,7 +309,7 @@ export default function SetupPage() {
                       Select {playMode === 'singles' ? '1 player' : '2 players'} for this match:
                     </div>
                     {selectedCaptainAPlayers.map((player) => {
-                      const eligible = selectedCaptainB ? canPlayerPlay(player, category, selectedCaptainB.teamName, todaySchedule?.isFinal ?? false) : true;
+                      const eligible = (selectedCaptainAId && selectedCaptainBId) ? canPlayerPlay(player, category, selectedCaptainAId, selectedCaptainBId, todaySchedule?.isFinal ?? false) : true;
                       return (
                       <label
                         key={player}
@@ -330,7 +331,7 @@ export default function SetupPage() {
                           }}
                           className="w-4 h-4 rounded"
                         />
-                        <span className="text-sm font-medium">{player}</span>
+                        <span className="text-sm font-medium">{player.replace(/F$/, '')}</span>
                         {!eligible && <span className="text-xs text-red-500 ml-auto">Max 2 games reached</span>}
                       </label>
                       );
@@ -386,7 +387,7 @@ export default function SetupPage() {
                         style={{ backgroundColor: 'var(--color-bg)' }}
                       >
                         <span className="text-sm font-bold" style={{ color: 'var(--color-score-b)' }}>✓</span>
-                        <span className="text-sm font-medium">{player}</span>
+                        <span className="text-sm font-medium">{player.replace(/F$/, '')}</span>
                       </div>
                     ))}
                   </div>
@@ -397,7 +398,7 @@ export default function SetupPage() {
                       Select {playMode === 'singles' ? '1 player' : '2 players'} for this match:
                     </div>
                     {selectedCaptainBPlayers.map((player) => {
-                      const eligible = selectedCaptainA ? canPlayerPlay(player, category, selectedCaptainA.teamName, todaySchedule?.isFinal ?? false) : true;
+                      const eligible = (selectedCaptainBId && selectedCaptainAId) ? canPlayerPlay(player, category, selectedCaptainBId, selectedCaptainAId, todaySchedule?.isFinal ?? false) : true;
                       return (
                       <label
                         key={player}
@@ -419,7 +420,7 @@ export default function SetupPage() {
                           }}
                           className="w-4 h-4 rounded"
                         />
-                        <span className="text-sm font-medium">{player}</span>
+                        <span className="text-sm font-medium">{player.replace(/F$/, '')}</span>
                         {!eligible && <span className="text-xs text-red-500 ml-auto">Max 2 games reached</span>}
                       </label>
                       );

@@ -15,6 +15,9 @@ metadata:
   name: scoring-server
   labels:
     app: scoring-server
+  annotations:
+    autoscaling.knative.dev/minScale: "1"
+    autoscaling.knative.dev/maxScale: "1"
 spec:
   replicas: 1
   strategy:
@@ -29,7 +32,7 @@ spec:
     spec:
       containers:
         - name: scoring-server
-          image: openshift-registry.eu-at-3.icp.infineon.com/rddp-staging/scoring-server:latest
+          image: openshift-registry.eu-at-3.icp.infineon.com/play-ahmd-test/scoring-server:latest
           ports:
             - containerPort: 3001
           env:
