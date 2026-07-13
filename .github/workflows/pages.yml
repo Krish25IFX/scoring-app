@@ -36,6 +36,9 @@ jobs:
       - name: Set Vite base for GitHub Pages
         run: echo "VITE_BASE=/scoring-app/" >> $GITHUB_ENV
 
+      - name: Set API URL for production
+        run: echo "VITE_API_URL=${{ vars.VITE_API_URL }}" >> $GITHUB_ENV
+
       - name: Build
         run: npm run build
 
