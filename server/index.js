@@ -1,57 +1,41 @@
 const express = require('express');
 const cors = require('cors');
-const Database = require('better-sqlite3');
-const path = require('path');
+const { createClient } = require('@libsql/client');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Database setup — use DB_PATH env for container deployments
-const dbPath = process.env.DB_PATH || path.join(__dirname, 'tournament.db');
-const db = new Database(dbPath);
-db.pragma('journal_mode = WAL');
+// Database setup — Turso (remote) or local SQLite fallback
+const db = createClient({
+  url: process.env.TURSO_DATABASE_URL || 'file:tournament.db',
+  authToken: process.env.TURSO_AUTH_TOKEN,
+});
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS active_matches (
-    match_id TEXT PRIMARY KEY,
-    state TEXT NOT NULL,
-    updated_at INTEGER NOT NULL
-  );
-
-  CREATE TABLE IF NOT EXISTS matches (
-    id TEXT PRIMARY KEY,
-    state TEXT NOT NULL,
-    created_at INTEGER NOT NULL,
-    ended_at INTEGER
-  );
-
-  CREATE TABLE IF NOT EXISTS captain_selections (
-    captain_id TEXT PRIMARY KEY,
-    players TEXT NOT NULL,
-    updated_at INTEGER NOT NULL
-  );
-`);
-
-// Migrate: if old single-row active_match table exists, drop it
-try { db.exec('DROP TABLE IF EXISTS active_match'); } catch { /* ignore */ }
-
-// Prepared statements
-const getAllActiveMatches = db.prepare('SELECT match_id, state FROM active_matches ORDER BY updated_at DESC');
-const getActiveMatchById = db.prepare('SELECT state FROM active_matches WHERE match_id = ?');
-const upsertActiveMatch = db.prepare(`
-  INSERT INTO active_matches (match_id, state, updated_at) VALUES (?, ?, ?)
-  ON CONFLICT(match_id) DO UPDATE SET state = excluded.state, updated_at = excluded.updated_at
-`);
-const deleteActiveMatchById = db.prepare('DELETE FROM active_matches WHERE match_id = ?');
-
-const insertMatch = db.prepare('INSERT OR REPLACE INTO matches (id, state, created_at, ended_at) VALUES (?, ?, ?, ?)');
-const getAllMatches = db.prepare('SELECT state FROM matches ORDER BY created_at DESC');
-
-const upsertCaptainSelection = db.prepare(`
-  INSERT INTO captain_selections (captain_id, players, updated_at) VALUES (?, ?, ?)
-  ON CONFLICT(captain_id) DO UPDATE SET players = excluded.players, updated_at = excluded.updated_at
-`);
-const getAllCaptainSelections = db.prepare('SELECT captain_id, players FROM captain_selections');
+// Initialize tables
+(async () => {
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS active_matches (
+      match_id TEXT PRIMARY KEY,
+      state TEXT NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `);
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS matches (
+      id TEXT PRIMARY KEY,
+      state TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      ended_at INTEGER
+    )
+  `);
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS captain_selections (
+      captain_id TEXT PRIMARY KEY,
+      players TEXT NOT NULL,
+      updated_at INTEGER NOT NULL
+    )
+  `);
+})();
 
 // Middleware
 app.use(cors({
@@ -63,89 +47,88 @@ app.use(express.json({ limit: '5mb' }));
 
 // ─── Active Matches (live scoring — supports multiple simultaneous) ───
 
-// GET all active matches (spectators see a list)
-app.get('/api/active-matches', (req, res) => {
-  const rows = getAllActiveMatches.all();
-  const matches = rows.map((r) => JSON.parse(r.state));
+app.get('/api/active-matches', async (req, res) => {
+  const result = await db.execute('SELECT match_id, state FROM active_matches ORDER BY updated_at DESC');
+  const matches = result.rows.map((r) => JSON.parse(r.state));
   res.json({ matches });
 });
 
-// GET single active match by ID (backward compat + spectator detail)
-app.get('/api/active-match', (req, res) => {
-  // Return all active matches for backward compatibility
-  const rows = getAllActiveMatches.all();
-  const matches = rows.map((r) => JSON.parse(r.state));
-  // Return first match for old clients, all for new
+app.get('/api/active-match', async (req, res) => {
+  const result = await db.execute('SELECT match_id, state FROM active_matches ORDER BY updated_at DESC');
+  const matches = result.rows.map((r) => JSON.parse(r.state));
   res.json({ match: matches[0] ?? null, matches });
 });
 
-app.get('/api/active-match/:matchId', (req, res) => {
-  const row = getActiveMatchById.get(req.params.matchId);
-  if (!row) return res.json({ match: null });
-  res.json({ match: JSON.parse(row.state) });
+app.get('/api/active-match/:matchId', async (req, res) => {
+  const result = await db.execute({ sql: 'SELECT state FROM active_matches WHERE match_id = ?', args: [req.params.matchId] });
+  if (result.rows.length === 0) return res.json({ match: null });
+  res.json({ match: JSON.parse(result.rows[0].state) });
 });
 
-// POST update an active match (called by operator on every point)
-app.post('/api/active-match', (req, res) => {
+app.post('/api/active-match', async (req, res) => {
   const { match } = req.body;
   if (!match || !match.id) {
     return res.status(400).json({ error: 'match with id is required' });
   }
-  upsertActiveMatch.run(match.id, JSON.stringify(match), Date.now());
-
-  // Also save to matches history
-  insertMatch.run(match.id, JSON.stringify(match), match.startedAt, match.endedAt || null);
-
-  // If match is completed, remove from active
+  await db.execute({
+    sql: `INSERT INTO active_matches (match_id, state, updated_at) VALUES (?, ?, ?)
+          ON CONFLICT(match_id) DO UPDATE SET state = excluded.state, updated_at = excluded.updated_at`,
+    args: [match.id, JSON.stringify(match), Date.now()]
+  });
+  await db.execute({
+    sql: 'INSERT OR REPLACE INTO matches (id, state, created_at, ended_at) VALUES (?, ?, ?, ?)',
+    args: [match.id, JSON.stringify(match), match.startedAt, match.endedAt || null]
+  });
   if (match.matchWinner) {
-    deleteActiveMatchById.run(match.id);
+    await db.execute({ sql: 'DELETE FROM active_matches WHERE match_id = ?', args: [match.id] });
   }
-
   res.json({ ok: true });
 });
 
-// DELETE a specific active match
-app.delete('/api/active-match/:matchId', (req, res) => {
-  deleteActiveMatchById.run(req.params.matchId);
+app.delete('/api/active-match/:matchId', async (req, res) => {
+  await db.execute({ sql: 'DELETE FROM active_matches WHERE match_id = ?', args: [req.params.matchId] });
   res.json({ ok: true });
 });
 
-// DELETE all active matches (legacy)
-app.delete('/api/active-match', (req, res) => {
-  db.prepare('DELETE FROM active_matches').run();
+app.delete('/api/active-match', async (req, res) => {
+  await db.execute('DELETE FROM active_matches');
   res.json({ ok: true });
 });
 
 // ─── Match History ───
 
-app.get('/api/matches', (req, res) => {
-  const rows = getAllMatches.all();
-  const matches = rows.map((r) => JSON.parse(r.state));
+app.get('/api/matches', async (req, res) => {
+  const result = await db.execute('SELECT state FROM matches ORDER BY created_at DESC');
+  const matches = result.rows.map((r) => JSON.parse(r.state));
   res.json({ matches });
 });
 
-app.delete('/api/matches/:id', (req, res) => {
-  db.prepare('DELETE FROM matches WHERE id = ?').run(req.params.id);
+app.delete('/api/matches/:id', async (req, res) => {
+  await db.execute({ sql: 'DELETE FROM matches WHERE id = ?', args: [req.params.id] });
   res.json({ ok: true });
 });
 
 // ─── Captain Selections ───
 
-app.get('/api/captain-selections', (req, res) => {
-  const rows = getAllCaptainSelections.all();
+app.get('/api/captain-selections', async (req, res) => {
+  const result = await db.execute('SELECT captain_id, players FROM captain_selections');
   const selections = {};
-  for (const row of rows) {
+  for (const row of result.rows) {
     selections[row.captain_id] = JSON.parse(row.players);
   }
   res.json({ selections });
 });
 
-app.post('/api/captain-selections/:captainId', (req, res) => {
+app.post('/api/captain-selections/:captainId', async (req, res) => {
   const { selections } = req.body;
   if (!selections || typeof selections !== 'object') {
     return res.status(400).json({ error: 'selections must be an object keyed by opponent captain id' });
   }
-  upsertCaptainSelection.run(req.params.captainId, JSON.stringify(selections), Date.now());
+  await db.execute({
+    sql: `INSERT INTO captain_selections (captain_id, players, updated_at) VALUES (?, ?, ?)
+          ON CONFLICT(captain_id) DO UPDATE SET players = excluded.players, updated_at = excluded.updated_at`,
+    args: [req.params.captainId, JSON.stringify(selections), Date.now()]
+  });
   res.json({ ok: true });
 });
 
