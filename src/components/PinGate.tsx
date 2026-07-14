@@ -4,7 +4,7 @@ import { fetchCaptainSelections } from '../api';
 import { getTodaySchedule } from '../config/schedule';
 
 const SESSION_KEY = 'operator_auth';
-const OVERRIDE_PIN = '0000';
+const OVERRIDE_PIN = '1111';
 
 export default function PinGate({ children }: { children: React.ReactNode }) {
   const [pin, setPin] = useState('');

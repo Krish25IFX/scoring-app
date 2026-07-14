@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useMatch } from '../context/MatchContext';
 import { CAPTAINS } from '../config/players';
 import { CATEGORIES } from '../types';
+import type { Category } from '../types';
 import { exportCaptainSelectionsPDF } from '../export';
 
 const ADMIN_PIN = '0112';
@@ -15,6 +16,7 @@ export default function AdminPage() {
     () => sessionStorage.getItem(SESSION_KEY) === 'true'
   );
   const { captainSelections, refreshCaptainSelections, matchHistory, refreshMatchHistory } = useMatch();
+  const [filterCategory, setFilterCategory] = useState<Category | 'all'>('all');
 
   useEffect(() => {
     if (authed) {
@@ -81,6 +83,24 @@ export default function AdminPage() {
           <h1 className="text-2xl font-black" style={{ color: 'var(--color-primary)' }}>🛡️ Admin Panel</h1>
         </div>
 
+        {/* Category Filter */}
+        <div className="mb-6 p-3 rounded-lg border" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface)' }}>
+          <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>
+            Filter by Category
+          </label>
+          <select
+            value={filterCategory}
+            onChange={(e) => setFilterCategory(e.target.value as Category | 'all')}
+            className="w-full mt-1 p-2 rounded-lg border text-sm font-medium"
+            style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
+          >
+            <option value="all">All Categories</option>
+            {CATEGORIES.map((cat) => (
+              <option key={cat.id} value={cat.id}>{cat.label}</option>
+            ))}
+          </select>
+        </div>
+
         {/* Captain Selections */}
         <section className="mb-8">
           <div className="flex items-center justify-between mb-4">
@@ -101,12 +121,16 @@ export default function AdminPage() {
             <div className="space-y-4">
               {Object.entries(captainSelections).map(([captainId, categories]) => {
                 const captain = captainMap[captainId];
+                const filteredCategories = filterCategory === 'all'
+                  ? Object.entries(categories)
+                  : Object.entries(categories).filter(([cat]) => cat === filterCategory);
+                if (filteredCategories.length === 0) return null;
                 return (
                   <div key={captainId} className="p-4 rounded-2xl border-2" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface)' }}>
                     <h3 className="font-bold text-lg mb-2" style={{ color: 'var(--color-primary)' }}>
                       {captain?.name ?? captainId} — {captain?.teamName ?? 'Unknown Team'}
                     </h3>
-                    {Object.entries(categories).map(([category, opponents]) => (
+                    {filteredCategories.map(([category, opponents]) => (
                       <div key={category} className="mb-3 ml-2">
                         <h4 className="font-semibold text-sm mb-1" style={{ color: 'var(--color-text)' }}>
                           📋 {categoryMap[category] ?? category}
@@ -144,7 +168,7 @@ export default function AdminPage() {
             <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>No matches played yet.</p>
           ) : (
             <div className="space-y-3">
-              {matchHistory.filter((m) => m && m.teams && m.gamesWon && m.config).map((m) => (
+              {matchHistory.filter((m) => m && m.teams && m.gamesWon && m.config && (filterCategory === 'all' || m.category === filterCategory)).map((m) => (
                 <div key={m.id} className="p-3 rounded-xl border" style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-surface)' }}>
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-xs font-semibold uppercase" style={{ color: 'var(--color-text-muted)' }}>
