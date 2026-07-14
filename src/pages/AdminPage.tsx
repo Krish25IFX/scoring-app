@@ -107,7 +107,20 @@ export default function AdminPage() {
             <h2 className="text-xl font-bold" style={{ color: 'var(--color-text)' }}>Captain Selections</h2>
             {Object.keys(captainSelections).length > 0 && (
               <button
-                onClick={() => exportCaptainSelectionsPDF(captainSelections, CAPTAINS, categoryMap)}
+                onClick={() => {
+                  // Filter selections by category if a filter is active
+                  if (filterCategory === 'all') {
+                    exportCaptainSelectionsPDF(captainSelections, CAPTAINS, categoryMap);
+                  } else {
+                    const filtered: typeof captainSelections = {};
+                    for (const [captainId, categories] of Object.entries(captainSelections)) {
+                      if (categories[filterCategory]) {
+                        filtered[captainId] = { [filterCategory]: categories[filterCategory] };
+                      }
+                    }
+                    exportCaptainSelectionsPDF(filtered, CAPTAINS, categoryMap);
+                  }
+                }}
                 className="px-4 py-2 rounded-xl text-sm font-semibold text-white transition-transform hover:scale-105"
                 style={{ backgroundColor: 'var(--color-primary)' }}
               >
