@@ -56,3 +56,15 @@ export function isDeadlinePassed(): boolean {
   const now = new Date();
   return now.getHours() >= CAPTAIN_DEADLINE_HOUR;
 }
+
+/** Get all categories whose match date has already passed */
+export function getPastCategories(): Set<Category> {
+  const today = new Date().toISOString().slice(0, 10);
+  const past = new Set<Category>();
+  for (const day of TOURNAMENT_SCHEDULE) {
+    if (day.date < today) {
+      past.add(day.category);
+    }
+  }
+  return past;
+}

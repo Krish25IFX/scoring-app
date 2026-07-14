@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMatch } from '../context/MatchContext';
 import { CAPTAINS } from '../config/players';
-import { isDeadlinePassed, getTodaySchedule, CAPTAIN_DEADLINE_HOUR, MAX_GAMES_PER_PLAYER_PER_OPPONENT } from '../config/schedule';
+import { isDeadlinePassed, getTodaySchedule, CAPTAIN_DEADLINE_HOUR, MAX_GAMES_PER_PLAYER_PER_OPPONENT, getPastCategories } from '../config/schedule';
 import { CATEGORIES } from '../types';
 import type { Category, PlayMode } from '../types';
 
@@ -47,6 +47,9 @@ export default function CaptainLoginPage() {
   // Deadline check: lock submissions only for today's scheduled category
   const deadlinePassed = todaySchedule ? isDeadlinePassed() : false;
   const lockedCategory = deadlinePassed && todaySchedule ? todaySchedule.category : null;
+  // Lock all categories whose match date has already passed
+  const pastCategories = getPastCategories();
+  const isCategoryLocked = (cat: Category) => pastCategories.has(cat) || cat === lockedCategory;
 
   const [password, setPassword] = useState('');
   const [selectedCaptainId, setSelectedCaptainId] = useState<string | null>(() => {
@@ -229,9 +232,9 @@ export default function CaptainLoginPage() {
         {/* Step 1: Login */}
         {step === 'login' && (
           <div className="space-y-4">
-            {lockedCategory && (
+            {(lockedCategory || pastCategories.size > 0) && (
               <div className="p-3 rounded-lg text-center font-medium" style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444' }}>
-                ⚠️ Submissions for today's category ({CATEGORIES.find(c => c.id === lockedCategory)?.label}) are locked after {CAPTAIN_DEADLINE_HOUR > 12 ? `${CAPTAIN_DEADLINE_HOUR - 12}:00 PM` : `${CAPTAIN_DEADLINE_HOUR}:00 AM`}. Other categories remain open.
+                ⚠️ Categories for past match days are locked. {lockedCategory ? `Today's category is also locked after ${CAPTAIN_DEADLINE_HOUR > 12 ? `${CAPTAIN_DEADLINE_HOUR - 12}:00 PM` : `${CAPTAIN_DEADLINE_HOUR}:00 AM`}.` : ''}
               </div>
             )}
             {todaySchedule && (
@@ -297,8 +300,8 @@ export default function CaptainLoginPage() {
                 style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}
               >
                 {CATEGORIES.map((cat) => (
-                  <option key={cat.id} value={cat.id} disabled={cat.id === lockedCategory}>
-                    {cat.label} ({cat.mode === 'singles' ? '1 player' : '2 players'}){cat.id === lockedCategory ? ' 🔒' : ''}
+                  <option key={cat.id} value={cat.id} disabled={isCategoryLocked(cat.id)}>
+                    {cat.label} ({cat.mode === 'singles' ? '1 player' : '2 players'}){isCategoryLocked(cat.id) ? ' 🔒' : ''}
                   </option>
                 ))}
               </select>
@@ -317,7 +320,7 @@ export default function CaptainLoginPage() {
               {opponentTeams.map((opponent) => {
                 const selected = effectiveSelections[opponent.id] ?? [];
                 const isDone = selected.length === maxPlayersPerOpponent;
-                const isLocked = selectedCategory === lockedCategory;
+                const isLocked = isCategoryLocked(selectedCategory);
                 return (
                   <div
                     key={opponent.id}
@@ -369,7 +372,7 @@ export default function CaptainLoginPage() {
               </div>
             )}
 
-            {selectedCategory === lockedCategory && (
+            {isCategoryLocked(selectedCategory) && (
               <div className="p-3 rounded-lg text-center font-medium" style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444' }}>
                 🔒 This category is locked. Select a different category above.
               </div>
@@ -377,11 +380,11 @@ export default function CaptainLoginPage() {
 
             <button
               onClick={handleSubmitAll}
-              disabled={completedCount === 0 || selectedCategory === lockedCategory}
+              disabled={completedCount === 0 || isCategoryLocked(selectedCategory)}
               className="w-full py-3 rounded-lg text-white font-bold transition-transform hover:scale-105 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
               style={{ backgroundColor: 'var(--color-secondary)' }}
             >
-              {selectedCategory === lockedCategory ? '🔒 Category Locked' : `✓ Submit All Selections (${completedCount}/${opponentTeams.length})`}
+              {isCategoryLocked(selectedCategory) ? '🔒 Category Locked' : `✓ Submit All Selections (${completedCount}/${opponentTeams.length})`}
             </button>
             </>
             )}
@@ -389,7 +392,7 @@ export default function CaptainLoginPage() {
         )}
 
         {/* Step 2b: Player selection for a specific opponent */}
-        {step === 'selectPlayers' && currentCaptain && activeOpponentId && selectedCategory !== lockedCategory && (
+        {step === 'selectPlayers' && currentCaptain && activeOpponentId && !isCategoryLocked(selectedCategory) && (
           <div className="space-y-4">
             {(() => {
               const opponent = CAPTAINS.find((c) => c.id === activeOpponentId)!;
