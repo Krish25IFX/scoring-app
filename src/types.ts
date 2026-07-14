@@ -123,7 +123,8 @@ export interface MatchSummary {
 /** Tournament standings row for a team */
 export interface StandingsRow {
   teamName: string;
-  setsWon: number;
+  gamesWon: number; // complete match wins
+  setsWon: number;  // individual game/set wins across all matches
   totalPoints: number;
   totalOpponentPoints: number;
   rankingPoints: number; // totalPoints - totalOpponentPoints
