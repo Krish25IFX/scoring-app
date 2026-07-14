@@ -37,7 +37,7 @@ export const CAPTAINS: Captain[] = [
     id: 'captain4',
     name: 'Meet Dholariya',
     teamName: 'The Shuttle Force',
-    password: 'meet123',
+    password: 'MaD_1005',
     players: ['Meet Dholariya', 'Dave Anil', 'Simran RasdhariF', 'Rohit Parmar', 'Jugal gandhi', 'Vikram', 'Mayank Prajapati', 'yash Mewada', 'Anmol Pandey', 'Maulik Kanakiya', 'Richa SharmaF', 'Nikhil Shrivastava'],
   },
   {
