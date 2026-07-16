@@ -82,12 +82,14 @@ export default function SetupPage() {
 
   const requiredA = playMode === 'singles' ? [finalTeamAPlayers[0]] : [finalTeamAPlayers[0], finalTeamAPlayers[1]];
   const requiredB = playMode === 'singles' ? [finalTeamBPlayers[0]] : [finalTeamBPlayers[0], finalTeamBPlayers[1]];
-  const canStart =
+  const isAfter2PM = new Date().getHours() >= 14;
+  const captainsReady =
     requiredA.every(Boolean) &&
     requiredB.every(Boolean) &&
     Boolean(selectedCaptainAId) &&
     Boolean(selectedCaptainBId) &&
     selectedCaptainAId !== selectedCaptainBId;
+  const canStart = isAfter2PM && captainsReady;
 
   const handleStart = () => {
     if (!canStart) return;
@@ -508,7 +510,7 @@ export default function SetupPage() {
           className="w-full py-4 rounded-xl text-white text-xl font-bold transition-transform hover:scale-105 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
           style={{ backgroundColor: 'var(--color-secondary)' }}
         >
-          {canStart ? '▶ Start Match' : 'Select captains and players to continue'}
+          {!isAfter2PM ? '⏰ Match setup available from 2:00 PM' : captainsReady ? '▶ Start Match' : 'Select captains and players to continue'}
         </button>
 
         {/* Forfeit Section */}
