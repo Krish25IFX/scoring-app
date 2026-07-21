@@ -190,7 +190,6 @@ export default function StandingsPage() {
           <h3 className="font-bold text-sm mb-2" style={{ color: 'var(--color-text-muted)' }}>Ranking Rules</h3>
           <ul className="text-xs space-y-1" style={{ color: 'var(--color-text-muted)' }}>
             <li>• Team with highest <strong>Games Won</strong> (complete match wins) ranks first</li>
-            <li>• If games are equal, <strong>Sets Won</strong> (individual game wins) breaks the tie</li>
             <li>• If still equal, <strong>Ranking Points</strong> (Team Points − Opponent Points) breaks the tie</li>
             <li>• If still tied, a Mix Double tiebreaker match is played</li>
           </ul>
