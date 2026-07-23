@@ -24,6 +24,7 @@ export const CATEGORY_GROUP_MAP: Record<Category, CategoryGroup> = {
   mens_double_3: 'mens_double',
   mens_double_4: 'mens_double',
   mens_double_5: 'mens_double',
+  mens_double_6: 'mens_double',
 };
 
 export const MAX_GAMES_PER_PLAYER_PER_OPPONENT = 2;
@@ -41,7 +42,7 @@ export const TOURNAMENT_SCHEDULE: ScheduleDay[] = [
   { date: '2026-07-20', label: '20th July', category: 'mens_double_4', categoryGroup: 'mens_double', timing: '6:00 PM – 8:00 PM', isFinal: false },
   { date: '2026-07-21', label: '21st July', category: 'mens_double_5', categoryGroup: 'mens_double', timing: '6:00 PM – 8:00 PM', isFinal: false },
   { date: '2026-07-22', label: '22nd July', category: 'womens_double', categoryGroup: 'womens_double', timing: '6:00 PM – 8:00 PM', isFinal: false },
-  { date: '2026-07-23', label: '23rd July', category: 'mens_double_5', categoryGroup: 'mens_double', timing: '6:00 PM – 8:00 PM', isFinal: false },
+  { date: '2026-07-23', label: '23rd July', category: 'mens_double_6', categoryGroup: 'mens_double', timing: '6:00 PM – 8:00 PM', isFinal: false },
   { date: '2026-07-24', label: '24th July', category: 'mens_double_1', categoryGroup: 'mens_double', timing: '6:00 PM – 9:00 PM', isFinal: true },
 ];
 
@@ -60,13 +61,9 @@ export function isDeadlinePassed(): boolean {
 /** Get all categories whose match date has already passed */
 export function getPastCategories(): Set<Category> {
   const today = new Date().toISOString().slice(0, 10);
-  // Categories scheduled for today are never considered "past"
-  const todayCategories = new Set(
-    TOURNAMENT_SCHEDULE.filter((d) => d.date === today).map((d) => d.category)
-  );
   const past = new Set<Category>();
   for (const day of TOURNAMENT_SCHEDULE) {
-    if (day.date < today && !todayCategories.has(day.category)) {
+    if (day.date < today) {
       past.add(day.category);
     }
   }

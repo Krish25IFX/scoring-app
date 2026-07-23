@@ -10,7 +10,8 @@ export type Category =
   | 'mens_double_2'
   | 'mens_double_3'
   | 'mens_double_4'
-  | 'mens_double_5';
+  | 'mens_double_5'
+  | 'mens_double_6';
 
 export const CATEGORIES: { id: Category; label: string; mode: PlayMode }[] = [
   { id: 'mens_single', label: "Men's Single (17th Jul)", mode: 'singles' },
@@ -21,6 +22,7 @@ export const CATEGORIES: { id: Category; label: string; mode: PlayMode }[] = [
   { id: 'mens_double_3', label: "Men's Double (16th Jul)", mode: 'doubles' },
   { id: 'mens_double_4', label: "Men's Double (20th Jul)", mode: 'doubles' },
   { id: 'mens_double_5', label: "Men's Double (21st Jul)", mode: 'doubles' },
+  { id: 'mens_double_6', label: "Men's Double (23rd Jul)", mode: 'doubles' },
 ];
 
 export interface Player {
