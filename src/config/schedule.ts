@@ -60,9 +60,13 @@ export function isDeadlinePassed(): boolean {
 /** Get all categories whose match date has already passed */
 export function getPastCategories(): Set<Category> {
   const today = new Date().toISOString().slice(0, 10);
+  // Categories scheduled for today are never considered "past"
+  const todayCategories = new Set(
+    TOURNAMENT_SCHEDULE.filter((d) => d.date === today).map((d) => d.category)
+  );
   const past = new Set<Category>();
   for (const day of TOURNAMENT_SCHEDULE) {
-    if (day.date < today) {
+    if (day.date < today && !todayCategories.has(day.category)) {
       past.add(day.category);
     }
   }
