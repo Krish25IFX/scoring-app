@@ -119,6 +119,22 @@ app.get('/api/captain-selections', async (req, res) => {
   res.json({ selections });
 });
 
+app.delete('/api/captain-selections/category/:category', async (req, res) => {
+  const category = req.params.category;
+  const result = await db.execute('SELECT captain_id, players FROM captain_selections');
+  for (const row of result.rows) {
+    const selections = JSON.parse(row.players);
+    if (category in selections) {
+      delete selections[category];
+      await db.execute({
+        sql: 'UPDATE captain_selections SET players = ?, updated_at = ? WHERE captain_id = ?',
+        args: [JSON.stringify(selections), Date.now(), row.captain_id]
+      });
+    }
+  }
+  res.json({ ok: true });
+});
+
 app.post('/api/captain-selections/:captainId', async (req, res) => {
   const { selections } = req.body;
   if (!selections || typeof selections !== 'object') {

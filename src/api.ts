@@ -56,6 +56,10 @@ export async function fetchCaptainSelections(): Promise<CaptainSelectionsMap> {
   return data.selections ?? {};
 }
 
+export async function deleteCaptainSelectionsByCategory(category: string): Promise<void> {
+  await fetch(`${API_BASE}/captain-selections/category/${encodeURIComponent(category)}`, { method: 'DELETE' });
+}
+
 export async function postCaptainSelection(captainId: string, selections: Record<string, Record<string, string[]>>): Promise<void> {
   await fetch(`${API_BASE}/captain-selections/${encodeURIComponent(captainId)}`, {
     method: 'POST',

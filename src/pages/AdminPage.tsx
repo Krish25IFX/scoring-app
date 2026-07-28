@@ -5,6 +5,7 @@ import { CAPTAINS } from '../config/players';
 import { CATEGORIES } from '../types';
 import type { Category } from '../types';
 import { exportCaptainSelectionsPDF } from '../export';
+import { deleteCaptainSelectionsByCategory } from '../api';
 
 const ADMIN_PIN = '0112';
 const SESSION_KEY = 'admin_auth';
@@ -105,7 +106,20 @@ export default function AdminPage() {
         <section className="mb-8">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-bold" style={{ color: 'var(--color-text)' }}>Captain Selections</h2>
-            {Object.keys(captainSelections).length > 0 && (
+            {filterCategory !== 'all' && Object.values(captainSelections).some((cats) => cats[filterCategory]) && (
+              <button
+                onClick={async () => {
+                  if (!confirm(`Clear all captain selections for "${categoryMap[filterCategory]}"?`)) return;
+                  await deleteCaptainSelectionsByCategory(filterCategory);
+                  await refreshCaptainSelections();
+                }}
+                className="px-4 py-2 rounded-xl text-sm font-semibold text-white transition-transform hover:scale-105"
+                style={{ backgroundColor: '#ef4444' }}
+              >
+                🗑️ Clear Selections
+              </button>
+          )}
+          {Object.keys(captainSelections).length > 0 && (
               <button
                 onClick={() => {
                   // Filter selections by category if a filter is active
