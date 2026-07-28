@@ -43,7 +43,7 @@ export const TOURNAMENT_SCHEDULE: ScheduleDay[] = [
   { date: '2026-07-21', label: '21st July', category: 'mens_double_5', categoryGroup: 'mens_double', timing: '6:00 PM – 8:00 PM', isFinal: false },
   { date: '2026-07-22', label: '22nd July', category: 'womens_double', categoryGroup: 'womens_double', timing: '6:00 PM – 8:00 PM', isFinal: false },
   { date: '2026-07-23', label: '23rd July', category: 'mens_double_6', categoryGroup: 'mens_double', timing: '6:00 PM – 8:00 PM', isFinal: false },
-  { date: '2026-07-24', label: '24th July', category: 'mens_double_1', categoryGroup: 'mens_double', timing: '6:00 PM – 9:00 PM', isFinal: true },
+  { date: '2026-07-28', label: '24th July', category: 'mens_double_1', categoryGroup: 'mens_double', timing: '6:00 PM – 9:00 PM', isFinal: true },
 ];
 
 /** Get today's schedule entry */
