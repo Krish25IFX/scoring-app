@@ -43,7 +43,7 @@ export const TOURNAMENT_SCHEDULE: ScheduleDay[] = [
   { date: '2026-07-21', label: '21st July', category: 'mens_double_5', categoryGroup: 'mens_double', timing: '6:00 PM – 8:00 PM', isFinal: false },
   { date: '2026-07-22', label: '22nd July', category: 'womens_double', categoryGroup: 'womens_double', timing: '6:00 PM – 8:00 PM', isFinal: false },
   { date: '2026-07-23', label: '23rd July', category: 'mens_double_6', categoryGroup: 'mens_double', timing: '6:00 PM – 8:00 PM', isFinal: false },
-  { date: '2026-07-28', label: '28th July', category: 'mens_double_1', categoryGroup: 'mens_double', timing: '6:00 PM – 9:00 PM', isFinal: true },
+  { date: '2026-07-28', label: '28th July', category: 'mens_double_1', categoryGroup: 'mens_double', timing: '6:00 PM – 8:00 PM', isFinal: false },
 ];
 
 /** Get today's schedule entry */
@@ -61,9 +61,14 @@ export function isDeadlinePassed(): boolean {
 /** Get all categories whose match date has already passed */
 export function getPastCategories(): Set<Category> {
   const today = new Date().toISOString().slice(0, 10);
+  // A category scheduled for today is never considered "past",
+  // even if the same category appeared on an earlier date.
+  const todayCategories = new Set(
+    TOURNAMENT_SCHEDULE.filter((d) => d.date === today).map((d) => d.category)
+  );
   const past = new Set<Category>();
   for (const day of TOURNAMENT_SCHEDULE) {
-    if (day.date < today) {
+    if (day.date < today && !todayCategories.has(day.category)) {
       past.add(day.category);
     }
   }
