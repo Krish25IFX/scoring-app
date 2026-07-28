@@ -275,7 +275,7 @@ export function MatchProvider({ children }: { children: ReactNode }) {
       ? { forfeited: true, forfeitingTeam: 'both', gamePointsWinner: 0, gamePointsLoser: 0, setPointsWinner: 0, setPointsLoser: 0 }
       : { forfeited: true, forfeitingTeam, gamePointsWinner: 22, gamePointsLoser: 0, setPointsWinner: 1, setPointsLoser: 0 };
 
-    const catMeta = ({ mens_single: 'singles', womens_double: 'doubles', mix_double: 'doubles', mens_double_1: 'doubles', mens_double_2: 'doubles', mens_double_3: 'doubles', mens_double_4: 'doubles', mens_double_5: 'doubles', mens_double_6: 'doubles' } as const)[category];
+    const catMeta = ({ mens_single: 'singles', womens_double: 'doubles', mix_double: 'doubles', mens_double_1: 'doubles', mens_double_2: 'doubles', mens_double_3: 'doubles', mens_double_4: 'doubles', mens_double_5: 'doubles', mens_double_6: 'doubles', mens_double_7: 'doubles' } as const)[category];
     const config: MatchConfig = {
       bestOf: 1,
       pointsToWin: [21],

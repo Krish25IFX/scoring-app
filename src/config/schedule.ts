@@ -25,6 +25,7 @@ export const CATEGORY_GROUP_MAP: Record<Category, CategoryGroup> = {
   mens_double_4: 'mens_double',
   mens_double_5: 'mens_double',
   mens_double_6: 'mens_double',
+  mens_double_7: 'mens_double',
 };
 
 export const MAX_GAMES_PER_PLAYER_PER_OPPONENT = 2;
@@ -43,7 +44,7 @@ export const TOURNAMENT_SCHEDULE: ScheduleDay[] = [
   { date: '2026-07-21', label: '21st July', category: 'mens_double_5', categoryGroup: 'mens_double', timing: '6:00 PM – 8:00 PM', isFinal: false },
   { date: '2026-07-22', label: '22nd July', category: 'womens_double', categoryGroup: 'womens_double', timing: '6:00 PM – 8:00 PM', isFinal: false },
   { date: '2026-07-23', label: '23rd July', category: 'mens_double_6', categoryGroup: 'mens_double', timing: '6:00 PM – 8:00 PM', isFinal: false },
-  { date: '2026-07-28', label: '28th July', category: 'mens_double_1', categoryGroup: 'mens_double', timing: '6:00 PM – 8:00 PM', isFinal: false },
+  { date: '2026-07-28', label: '28th July', category: 'mens_double_7', categoryGroup: 'mens_double', timing: '6:00 PM – 8:00 PM', isFinal: false },
 ];
 
 /** Get today's schedule entry */
